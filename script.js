@@ -129,30 +129,65 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // Initialize background rotation system
-    function initBackgroundRotation() {
-        // Create first background
-        addBackgroundLayer(backgrounds[currentBgIndex], true);
+    function preloadBackgroundImages(imageUrls) {
+        const preloadPromises = imageUrls.map(url => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => resolve(url);
+                img.onerror = () => reject(`Failed to load ${url}`);
+                img.src = url;
+            });
+        });
         
-        // Set up rotation interval
-        bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
+        return Promise.all(preloadPromises)
+            .then(loaded => {
+                console.log(`Successfully preloaded ${loaded.length} background images`);
+                return loaded;
+            })
+            .catch(error => {
+                console.error('Error preloading background images:', error);
+                return [];
+            });
     }
     
-    // Add a new background layer
+    // Replace the current initBackgroundRotation function with this one
+    function initBackgroundRotation() {
+        // First, add a loading background (optional)
+        backgroundContainer.innerHTML = '<div class="background-layer active-background" style="background-color: #f5f5f5;"></div>';
+        
+        // Preload all background images before starting the rotation
+        preloadBackgroundImages(backgrounds)
+            .then(() => {
+                // Clear any loading background
+                backgroundContainer.innerHTML = '';
+                
+                // Create first background
+                addBackgroundLayer(backgrounds[currentBgIndex], true);
+                
+                // Set up rotation interval
+                bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
+            });
+    }
+    
+    // Optimize the existing addBackgroundLayer function
     function addBackgroundLayer(imageUrl, isActive = false) {
         const backgroundLayer = document.createElement('div');
         backgroundLayer.className = 'background-layer';
         if (isActive) {
+            // Add the active class immediately to avoid delay
             backgroundLayer.classList.add('active-background');
         }
+        
+        // Use the preloaded image (already cached)
         backgroundLayer.style.backgroundImage = `url(${imageUrl})`;
         backgroundContainer.appendChild(backgroundLayer);
         
-        // Force repaint to ensure the transition works
+        // Force repaint to ensure the transition works, but only for non-active layers
         if (!isActive) {
-            setTimeout(() => {
+            // Use requestAnimationFrame for better performance
+            requestAnimationFrame(() => {
                 backgroundLayer.classList.add('active-background');
-            }, 50);
+            });
         }
         
         return backgroundLayer;
