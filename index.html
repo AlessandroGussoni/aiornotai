@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Image Detection Challenge</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Background container -->
+    <div id="background-container"></div>
+
+    <div class="container">
+        <!-- Landing page container (also used for results) -->
+        <div id="landing-container">
+            <!-- Initial content (description and start button) -->
+            <div id="intro-section">
+                <h1>AI or not AI?</h1>
+                <p>Ever wondered if you can spot AI-generated art? Here's your chance to find out!</p>
+                <p>You'll see 10 pairs of images—one crafted by a human, the other by AI. Click the one you think is AI-made</p>
+                <p>All these pieces are handpicked by me for their subjective beauty and impact</p>
+                <button id="start-game">Start Challenge</button>
+            </div>
+            
+            <!-- Results section (initially hidden) -->
+            <div id="results-section" class="hidden">
+                <h2>Results</h2>
+                <p>You correctly identified <span id="correct-count">0</span> out of 10 images.</p>
+                <p>Success rate: <span id="success-rate">0</span>%</p>
+                <div class="button-group">
+                    <button id="play-again">Play Again</button>
+                    <button id="review-game">Review</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game container (initially hidden) -->
+        <div id="game-container" class="hidden">
+            <div id="images-container">
+                <div class="image-choice" id="image1-container">
+                    <img id="image1" src="" alt="Image 1">
+                </div>
+                <div class="image-choice" id="image2-container">
+                    <img id="image2" src="" alt="Image 2">
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
