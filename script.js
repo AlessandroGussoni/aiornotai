@@ -129,65 +129,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    function preloadBackgroundImages(imageUrls) {
-        const preloadPromises = imageUrls.map(url => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => resolve(url);
-                img.onerror = () => reject(`Failed to load ${url}`);
-                img.src = url;
-            });
-        });
-        
-        return Promise.all(preloadPromises)
-            .then(loaded => {
-                console.log(`Successfully preloaded ${loaded.length} background images`);
-                return loaded;
-            })
-            .catch(error => {
-                console.error('Error preloading background images:', error);
-                return [];
-            });
-    }
-    
-    // Replace the current initBackgroundRotation function with this one
+    // Initialize background rotation system
     function initBackgroundRotation() {
-        // First, add a loading background (optional)
-        backgroundContainer.innerHTML = '<div class="background-layer active-background" style="background-color: #f5f5f5;"></div>';
+        // Create first background
+        addBackgroundLayer(backgrounds[currentBgIndex], true);
         
-        // Preload all background images before starting the rotation
-        preloadBackgroundImages(backgrounds)
-            .then(() => {
-                // Clear any loading background
-                backgroundContainer.innerHTML = '';
-                
-                // Create first background
-                addBackgroundLayer(backgrounds[currentBgIndex], true);
-                
-                // Set up rotation interval
-                bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
-            });
+        // Set up rotation interval
+        bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
     }
     
-    // Optimize the existing addBackgroundLayer function
+    // Add a new background layer
     function addBackgroundLayer(imageUrl, isActive = false) {
         const backgroundLayer = document.createElement('div');
         backgroundLayer.className = 'background-layer';
         if (isActive) {
-            // Add the active class immediately to avoid delay
             backgroundLayer.classList.add('active-background');
         }
-        
-        // Use the preloaded image (already cached)
         backgroundLayer.style.backgroundImage = `url(${imageUrl})`;
         backgroundContainer.appendChild(backgroundLayer);
         
-        // Force repaint to ensure the transition works, but only for non-active layers
+        // Force repaint to ensure the transition works
         if (!isActive) {
-            // Use requestAnimationFrame for better performance
-            requestAnimationFrame(() => {
+            setTimeout(() => {
                 backgroundLayer.classList.add('active-background');
-            });
+            }, 50);
         }
         
         return backgroundLayer;
