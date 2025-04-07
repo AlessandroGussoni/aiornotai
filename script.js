@@ -24,6 +24,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentBgIndex = 0;
     let bgRotationInterval = null;
 
+    // Preloaded image cache
+    const imageCache = {
+        backgrounds: [],
+        aiImages: [],
+        realImages: []
+    };
+
     // DOM elements
     const landingContainer = document.getElementById('landing-container');
     const introSection = document.getElementById('intro-section');
@@ -39,11 +46,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     const playAgainButton = document.getElementById('play-again');
     const reviewGameButton = document.getElementById('review-game'); // New button
     const backgroundContainer = document.getElementById('background-container');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const loadingProgress = document.getElementById('loading-progress');
 
     // Initialize game by counting files, loading metadata, and setting up indices
     await initGame();
-    initBackgroundRotation();
-
+    
     // Event listeners
     startGameButton.addEventListener('click', startGame);
     
@@ -80,13 +88,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         correctAnswers = 0;
         reviewMode = false;
         
-        // Show message area but clear any text
+        // Init background rotation if not already started
+        if (!bgRotationInterval) {
+            initBackgroundRotation();
+        }
         
         loadImagePair();
     }
     
     async function initGame() {
         try {
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+            
             // Count the number of files in each directory
             const [n_ai, n_real] = await countFilesInDirectories();
             console.log(`Found ${n_ai} AI images and ${n_real} real images.`);
@@ -98,9 +112,77 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Load the artwork metadata
             await loadArtworkMetadata();
             
+            // Preload all images
+            await preloadAllImages(n_ai, n_real);
+            
+            // Initialize background with preloaded image
+            initBackgroundRotation();
+            
+            // Hide loading indicator when done
+            loadingIndicator.classList.add('hidden');
+            
         } catch (error) {
             console.error('Error initializing game:', error);
+            loadingIndicator.classList.add('hidden');
         }
+    }
+    
+    // New preloading function
+    async function preloadAllImages(n_ai, n_real) {
+        const totalImagesToLoad = backgrounds.length + ai_indices.length + real_indices.length;
+        let loadedCount = 0;
+        
+        const updateProgress = () => {
+            loadedCount++;
+            const percent = Math.floor((loadedCount / totalImagesToLoad) * 100);
+            loadingProgress.textContent = `${percent}%`;
+            loadingProgress.style.width = `${percent}%`;
+        };
+        
+        // Helper function to preload a single image
+        const preloadImage = (src) => {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                img.onload = () => {
+                    updateProgress();
+                    resolve(img);
+                };
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${src}`);
+                    updateProgress();
+                    // Resolve anyway to continue loading other images
+                    resolve(null);
+                };
+                img.src = src;
+            });
+        };
+        
+        // Preload backgrounds
+        const bgPromises = backgrounds.map(bg => {
+            return preloadImage(bg).then(img => {
+                if (img) imageCache.backgrounds.push(img);
+            });
+        });
+        
+        // Preload AI images
+        const aiPromises = ai_indices.map(index => {
+            const src = `assets/ai_images/${index}.png`;
+            return preloadImage(src).then(img => {
+                if (img) imageCache.aiImages[index] = img;
+            });
+        });
+        
+        // Preload real images
+        const realPromises = real_indices.map(index => {
+            const src = `assets/real_images/${index}.png`;
+            return preloadImage(src).then(img => {
+                if (img) imageCache.realImages[index] = img;
+            });
+        });
+        
+        // Wait for all images to load
+        await Promise.all([...bgPromises, ...aiPromises, ...realPromises]);
+        console.log('All images preloaded successfully');
     }
     
     // New function to load the artwork metadata
@@ -240,7 +322,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const ai_index = ai_indices[currentPair - 1];
         const real_index = real_indices[currentPair - 1];
         
-        // Set image sources
+        // Set image sources - use the preloaded image URLs from cache
         let leftImageSrc, rightImageSrc;
         if (aiImagePosition === 'left') {
             leftImageSrc = `assets/ai_images/${ai_index}.png`;
@@ -320,11 +402,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Show the game container directly
         gameContainer.classList.remove('hidden');
         
-
         // Re-initialize game to get fresh indices and load first pair
-        initGame().then(() => {
-            loadImagePair();  // Load first image pair immediately
-        });
+        // No need to preload images again as they're already cached
+        ai_indices = getUniqueRandomIndices(10, 1, imageCache.aiImages.length);
+        real_indices = getUniqueRandomIndices(10, 1, imageCache.realImages.length);
+        loadImagePair();
     }
     
     // New functions for review functionality
