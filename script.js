@@ -127,7 +127,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             loadingMessage.textContent = "Loading game...";
             
             // Count the number of files in each directory
-            const [n_ai, n_real] = await countFilesInDirectories();
+            const n_ai = 14 - 1
+            const n_real = 15 - 1
             console.log(`Found ${n_ai} AI images and ${n_real} real images.`);
             
             // Sample indices based on the counted files
