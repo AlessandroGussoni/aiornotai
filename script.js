@@ -24,6 +24,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     let currentBgIndex = 0;
     let bgRotationInterval = null;
 
+    // Loading state tracking
+    let isBackgroundLoading = false;
+    let backgroundLoadPromise = null;
+
     // Preloaded image cache
     const imageCache = {
         backgrounds: [],
@@ -48,8 +52,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const backgroundContainer = document.getElementById('background-container');
     const loadingIndicator = document.getElementById('loading-indicator');
     const loadingProgress = document.getElementById('loading-progress');
+    const loadingMessage = document.getElementById('loading-message');
 
-    // Initialize game by counting files, loading metadata, and setting up indices
+    // Initialize game - only load essential data first
     await initGame();
     
     // Event listeners
@@ -75,15 +80,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     reviewGameButton.addEventListener('click', startReview); // New event listener
 
     // Functions
-    function startGame() {
+    async function startGame() {
         // Reset game history
         gameHistory = [];
         
-        // Hide landing page, show game
+        // Hide landing page
         landingContainer.classList.add('hidden');
+        
+        // If we need to preload the first pair, show loading
+        if (!isPairPreloaded(currentPair)) {
+            loadingMessage.textContent = "Loading first images...";
+            loadingIndicator.classList.remove('hidden');
+            
+            // Preload just the first pair
+            await preloadSpecificPair(currentPair);
+            
+            // Hide loading when done
+            loadingIndicator.classList.add('hidden');
+        }
+        
+        // Show game
         gameContainer.classList.remove('hidden');
         
-        // Reset to first pair
+        // Reset game state
         currentPair = 1;
         correctAnswers = 0;
         reviewMode = false;
@@ -93,6 +112,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             initBackgroundRotation();
         }
         
+        // Start background loading the rest of the images if not already loading
+        if (!isBackgroundLoading) {
+            startBackgroundImageLoading();
+        }
+        
         loadImagePair();
     }
     
@@ -100,6 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
             // Show loading indicator
             loadingIndicator.classList.remove('hidden');
+            loadingMessage.textContent = "Loading game...";
             
             // Count the number of files in each directory
             const [n_ai, n_real] = await countFilesInDirectories();
@@ -112,14 +137,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Load the artwork metadata
             await loadArtworkMetadata();
             
-            // Preload all images
-            await preloadAllImages(n_ai, n_real);
+            // Preload only the first background image and first pair of game images
+            await preloadEssentialImages();
             
-            // Initialize background with preloaded image
-            initBackgroundRotation();
+            // Initialize first background
+            initFirstBackground();
             
-            // Hide loading indicator when done
+            // Hide loading indicator when essentials are loaded
             loadingIndicator.classList.add('hidden');
+            
+            // Start loading the rest of the images in the background
+            startBackgroundImageLoading();
             
         } catch (error) {
             console.error('Error initializing game:', error);
@@ -127,62 +155,103 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
-    // New preloading function
-    async function preloadAllImages(n_ai, n_real) {
-        const totalImagesToLoad = backgrounds.length + ai_indices.length + real_indices.length;
-        let loadedCount = 0;
-        
-        const updateProgress = () => {
-            loadedCount++;
-            const percent = Math.floor((loadedCount / totalImagesToLoad) * 100);
-            loadingProgress.textContent = `${percent}%`;
-            loadingProgress.style.width = `${percent}%`;
-        };
-        
-        // Helper function to preload a single image
-        const preloadImage = (src) => {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.onload = () => {
-                    updateProgress();
-                    resolve(img);
-                };
-                img.onerror = () => {
-                    console.error(`Failed to load image: ${src}`);
-                    updateProgress();
-                    // Resolve anyway to continue loading other images
-                    resolve(null);
-                };
-                img.src = src;
-            });
-        };
-        
-        // Preload backgrounds
-        const bgPromises = backgrounds.map(bg => {
-            return preloadImage(bg).then(img => {
-                if (img) imageCache.backgrounds.push(img);
-            });
+    // Preload only essential images to start quickly
+    async function preloadEssentialImages() {
+        // Preload only first background image
+        await preloadImage(backgrounds[0]).then(img => {
+            if (img) imageCache.backgrounds[0] = img;
         });
         
-        // Preload AI images
-        const aiPromises = ai_indices.map(index => {
-            const src = `assets/ai_images/${index}.png`;
-            return preloadImage(src).then(img => {
-                if (img) imageCache.aiImages[index] = img;
-            });
-        });
+        // Preload first pair of images
+        const firstPair = 1;
+        await preloadSpecificPair(firstPair);
         
-        // Preload real images
-        const realPromises = real_indices.map(index => {
-            const src = `assets/real_images/${index}.png`;
-            return preloadImage(src).then(img => {
-                if (img) imageCache.realImages[index] = img;
-            });
-        });
+        console.log('Essential images preloaded successfully');
+    }
+    
+    // Start background loading of remaining images
+    function startBackgroundImageLoading() {
+        if (isBackgroundLoading) return;
         
-        // Wait for all images to load
-        await Promise.all([...bgPromises, ...aiPromises, ...realPromises]);
-        console.log('All images preloaded successfully');
+        isBackgroundLoading = true;
+        
+        backgroundLoadPromise = new Promise(async (resolve) => {
+            console.log('Starting background loading of remaining images');
+            
+            // Background load remaining backgrounds (skip the first one)
+            for (let i = 1; i < backgrounds.length; i++) {
+                if (!imageCache.backgrounds[i]) {
+                    preloadImage(backgrounds[i]).then(img => {
+                        if (img) imageCache.backgrounds[i] = img;
+                    });
+                }
+            }
+            
+            // Background load all game images
+            for (let i = 2; i <= totalPairs; i++) {
+                if (!isPairPreloaded(i)) {
+                    // We don't await this, it happens in the background
+                    preloadSpecificPair(i, false);
+                }
+            }
+            
+            resolve();
+        });
+    }
+    
+    // Check if a specific pair is already loaded
+    function isPairPreloaded(pairNum) {
+        if (pairNum < 1 || pairNum > totalPairs) return false;
+        
+        const ai_index = ai_indices[pairNum - 1];
+        const real_index = real_indices[pairNum - 1];
+        
+        return !!(imageCache.aiImages[ai_index] && imageCache.realImages[real_index]);
+    }
+    
+    // Preload a specific pair of images
+    async function preloadSpecificPair(pairNum, waitForCompletion = true) {
+        if (pairNum < 1 || pairNum > totalPairs) return;
+        
+        const ai_index = ai_indices[pairNum - 1];
+        const real_index = real_indices[pairNum - 1];
+        
+        const aiSrc = `assets/ai_images/${ai_index}.png`;
+        const realSrc = `assets/real_images/${real_index}.png`;
+        
+        const aiPromise = imageCache.aiImages[ai_index] ? 
+            Promise.resolve(imageCache.aiImages[ai_index]) : 
+            preloadImage(aiSrc).then(img => {
+                if (img) imageCache.aiImages[ai_index] = img;
+                return img;
+            });
+            
+        const realPromise = imageCache.realImages[real_index] ? 
+            Promise.resolve(imageCache.realImages[real_index]) : 
+            preloadImage(realSrc).then(img => {
+                if (img) imageCache.realImages[real_index] = img;
+                return img;
+            });
+        
+        if (waitForCompletion) {
+            await Promise.all([aiPromise, realPromise]);
+        }
+    }
+    
+    // Helper function to preload a single image
+    function preloadImage(src) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.onload = () => {
+                resolve(img);
+            };
+            img.onerror = () => {
+                console.error(`Failed to load image: ${src}`);
+                // Resolve anyway to continue loading other images
+                resolve(null);
+            };
+            img.src = src;
+        });
     }
     
     // New function to load the artwork metadata
@@ -211,13 +280,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
     
+    // Initialize just the first background (for fast startup)
+    function initFirstBackground() {
+        addBackgroundLayer(backgrounds[currentBgIndex], true);
+    }
+    
     // Initialize background rotation system
     function initBackgroundRotation() {
-        // Create first background
-        addBackgroundLayer(backgrounds[currentBgIndex], true);
-        
-        // Set up rotation interval
-        bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
+        // Set up rotation interval if not already running
+        if (!bgRotationInterval) {
+            bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
+        }
     }
     
     // Add a new background layer
@@ -246,6 +319,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentBgIndex = (currentBgIndex + 1) % backgrounds.length;
         const nextBgUrl = backgrounds[currentBgIndex];
         
+        // Check if image is already preloaded, if not preload it
+        if (!imageCache.backgrounds[currentBgIndex]) {
+            preloadImage(nextBgUrl).then(img => {
+                if (img) imageCache.backgrounds[currentBgIndex] = img;
+                performBackgroundTransition(nextBgUrl);
+            });
+        } else {
+            performBackgroundTransition(nextBgUrl);
+        }
+    }
+    
+    // Perform the actual background transition
+    function performBackgroundTransition(nextBgUrl) {
         // Get all current background layers
         const currentLayers = backgroundContainer.querySelectorAll('.background-layer');
         
@@ -314,7 +400,25 @@ document.addEventListener('DOMContentLoaded', async () => {
         return indices;
     }
 
-    function loadImagePair() {
+    async function loadImagePair() {
+        // Check if the images for this pair are preloaded
+        if (!isPairPreloaded(currentPair)) {
+            // Show loading indicator if we need to load this pair
+            loadingIndicator.classList.remove('hidden');
+            loadingMessage.textContent = `Loading images...`;
+            
+            // Wait for this specific pair to load
+            await preloadSpecificPair(currentPair);
+            
+            // Hide loading indicator
+            loadingIndicator.classList.add('hidden');
+        }
+        
+        // Also preload the next pair in the background (if it exists)
+        if (currentPair < totalPairs && !isPairPreloaded(currentPair + 1)) {
+            preloadSpecificPair(currentPair + 1, false);
+        }
+        
         // Randomly decide which image will be AI-generated
         aiImagePosition = Math.random() < 0.5 ? 'left' : 'right';
         
@@ -322,7 +426,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const ai_index = ai_indices[currentPair - 1];
         const real_index = real_indices[currentPair - 1];
         
-        // Set image sources - use the preloaded image URLs from cache
+        // Set image sources
         let leftImageSrc, rightImageSrc;
         if (aiImagePosition === 'left') {
             leftImageSrc = `assets/ai_images/${ai_index}.png`;
