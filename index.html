@@ -77,7 +77,23 @@
             </div>
         </div>
     </div>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-analytics-compat.js"></script> 
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyBAzfM63eDpe0JloAXQ5MVGD1DQLyeRUTs",
+            authDomain: "aiornotai-3c509.firebaseapp.com",
+            projectId: "aiornotai-3c509",
+            storageBucket: "aiornotai-3c509.firebasestorage.app",
+            messagingSenderId: "581886115930",
+            appId: "1:581886115930:web:488baca8793d3847d29863",
+            measurementId: "G-K92C7DPTFZ"
+        };
 
+        const app = initializeApp(firebaseConfig);
+        const analytics = getAnalytics(app);
+      </script>
     <script src="script.js"></script>
 </body>
 </html>

@@ -57,8 +57,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize game - only load essential data first
     await initGame();
     
-    // Event listeners
-    startGameButton.addEventListener('click', startGame);
+    function logGameStart() {
+        try {
+            firebase.analytics().logEvent('game_start');
+            console.log('Game start logged to analytics');
+        } catch (error) {
+            console.error('Analytics error:', error);
+        }
+    }
+    
+    function logGameComplete(score, totalQuestions, successRate) {
+        try {
+            // Log to Analytics
+            firebase.analytics().logEvent('game_complete', {
+                score: score,
+                total_questions: totalQuestions,
+                success_rate: successRate
+            });
+            
+            // Store in Firestore
+            firebase.firestore().collection('game_results').add({
+                score: score,
+                total_questions: totalQuestions,
+                success_rate: successRate,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp()
+            })
+            .then((docRef) => {
+                console.log('Game result saved with ID:', docRef.id);
+            })
+            .catch((error) => {
+                console.error('Error saving result:', error);
+            });
+        } catch (error) {
+            console.error('Analytics error:', error);
+        }
+    }
+
+    startGameButton.addEventListener('click', () => {
+        startGame();
+        logGameStart();
+    });
     
     image1Container.addEventListener('click', () => {
         if (reviewMode) {
@@ -485,6 +523,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Update results elements
         correctCountElement.textContent = correctAnswers;
         successRateElement.textContent = successRate.toFixed(0);
+        
+        // Add this line to log the completion
+        logGameComplete(correctAnswers, totalPairs, successRate.toFixed(0));
         
         // Hide game container and show landing page with results
         gameContainer.classList.add('hidden');
