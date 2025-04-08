@@ -1,16 +1,42 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <meta name="description" content="Test your ability to distinguish between AI-generated art and human-created paintings. Take our AI art detection challenge and see if you can spot the difference!">
+    <meta name="keywords" content="AI art, artificial intelligence, art detection, AI paintings, AI-generated images, art challenge">
+    <meta property="og:title" content="AI or not AI? - Test Your AI Art Detection Skills">
+    <meta property="og:description" content="Can you tell which images are created by AI and which are painted by humans? Take our challenge and find out!">
+    <meta property="og:image" content="https://aiornotai.art/preview.jpg">
+    <meta property="og:url" content="https://aiornotai.art">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="canonical" href="https://aiornotai.art">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Image Detection Challenge</title>
     <link rel="stylesheet" href="styles.css">
+    <script type="application/ld+json">
+        {
+        "@context": "https://schema.org",
+        "@type": "Game",
+        "name": "AI or not AI",
+        "description": "Test your ability to distinguish between AI-generated art and human-created paintings. Take our AI art detection challenge and see if you can spot the difference!",
+        "url": "https://aiornotai.art",
+        "image": "https://aiornotai.art/preview.jpg",
+        "author": {
+            "@type": "Person",
+            "name": "Your Name"
+        },
+        "genre": "Educational Game",
+        "numberOfPlayers": {
+            "@type": "QuantitativeValue",
+            "minValue": 1,
+            "maxValue": 1
+        }
+        }
+        </script>
 </head>
 <body>
-    <!-- Background container -->
     <div id="background-container"></div>
 
-    <!-- Loading indicator -->
     <div id="loading-indicator" class="loading-container hidden">
         <div class="spinner"></div>
         <div class="loading-bar">
@@ -20,9 +46,7 @@
     </div>
 
     <div class="container">
-        <!-- Landing page container (also used for results) -->
         <div id="landing-container">
-            <!-- Initial content (description and start button) -->
             <div id="intro-section">
                 <h1>AI or not AI?</h1>
                 <p>Ever wondered if you can spot AI-generated art? Here's your chance to find out!</p>
@@ -31,7 +55,6 @@
                 <button id="start-game">Start Challenge</button>
             </div>
             
-            <!-- Results section (initially hidden) -->
             <div id="results-section" class="hidden">
                 <h2>Results</h2>
                 <p>You correctly identified <span id="correct-count">0</span> out of 10 images.</p>
@@ -43,7 +66,6 @@
             </div>
         </div>
 
-        <!-- Game container (initially hidden) -->
         <div id="game-container" class="hidden">
             <div id="images-container">
                 <div class="image-choice" id="image1-container">
