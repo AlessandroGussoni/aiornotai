@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://aiornotai.art/sitemap.xml
