@@ -1,4 +1,50 @@
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log("Firebase available:", typeof firebase !== 'undefined');
+if (typeof firebase !== 'undefined') {
+  console.log("Firebase version:", firebase.SDK_VERSION);
+  console.log("Firestore available:", typeof firebase.firestore === 'function');
+  console.log("Analytics available:", typeof firebase.analytics === 'function');
+}
+
+// Enhanced error logging for logGameComplete function
+function logGameComplete(score, totalQuestions, successRate) {
+  console.log("Attempting to log game completion...");
+  console.log("Data to save:", { score, totalQuestions, successRate });
+  
+  if (typeof firebase === 'undefined') {
+    console.error("Firebase is not defined");
+    return;
+  }
+  
+  try {
+    // Log to Analytics
+    firebase.analytics().logEvent('game_complete', {
+      score: score,
+      total_questions: totalQuestions,
+      success_rate: successRate
+    });
+    console.log("Analytics event logged successfully");
+    
+    // Store in Firestore
+    console.log("Attempting to write to Firestore...");
+    firebase.firestore().collection('game_results').add({
+      score: score,
+      total_questions: totalQuestions,
+      success_rate: successRate,
+      timestamp: firebase.firestore.FieldValue.serverTimestamp()
+    })
+    .then((docRef) => {
+      console.log('Game result saved successfully with ID:', docRef.id);
+    })
+    .catch((error) => {
+      console.error('Error saving to Firestore:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+    });
+  } catch (error) {
+    console.error("Critical error in logGameComplete:", error);
+  }
+}
     // Game variables
     const totalPairs = 10;
     let currentPair = 1;
