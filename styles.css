@@ -308,6 +308,20 @@ h1 {
     opacity: 1;
 }
 
+#percentile-container {
+    margin-bottom: 18px;
+    color: #444;
+    font-family: monospace;
+    font-size: 16px;
+    line-height: 1.6;
+}
+
+/* Add a subtle highlight to the percentile value */
+#percentile-value {
+    font-weight: bold;
+    color: #333;
+}
+
 /* Update the media query for smaller screens */
 @media (max-width: 768px) {
     #images-container {

@@ -213,7 +213,6 @@ function logGameComplete(score, totalQuestions, successRate) {
             // Count the number of files in each directory
             const n_ai = 14 - 1
             const n_real = 15 - 1
-            console.log(`Found ${n_ai} AI images and ${n_real} real images.`);
             
             // Sample indices based on the counted files
             ai_indices = getUniqueRandomIndices(10, 1, n_ai);
@@ -251,7 +250,6 @@ function logGameComplete(score, totalQuestions, successRate) {
         const firstPair = 1;
         await preloadSpecificPair(firstPair);
         
-        console.log('Essential images preloaded successfully');
     }
     
     // Start background loading of remaining images
@@ -261,7 +259,6 @@ function logGameComplete(score, totalQuestions, successRate) {
         isBackgroundLoading = true;
         
         backgroundLoadPromise = new Promise(async (resolve) => {
-            console.log('Starting background loading of remaining images');
             
             // Background load remaining backgrounds (skip the first one)
             for (let i = 1; i < backgrounds.length; i++) {
@@ -348,7 +345,6 @@ function logGameComplete(score, totalQuestions, successRate) {
                 throw new Error('Failed to load real artwork metadata');
             }
             realImageMetadata = await realResponse.json();
-            console.log('Real artwork metadata loaded successfully');
             
             // Load AI images metadata
             const aiResponse = await fetch('assets/ai_images/mapper.json');
@@ -356,7 +352,6 @@ function logGameComplete(score, totalQuestions, successRate) {
                 throw new Error('Failed to load AI image metadata');
             }
             aiImageMetadata = await aiResponse.json();
-            console.log('AI image metadata loaded successfully');
         } catch (error) {
             console.error('Error loading artwork metadata:', error);
             // Initialize as empty objects if loading fails
@@ -562,23 +557,75 @@ function logGameComplete(score, totalQuestions, successRate) {
         }
     }
 
-    function showResults() {
-        // Calculate success rate
-        const successRate = (correctAnswers / totalPairs) * 100;
-        
-        // Update results elements
-        correctCountElement.textContent = correctAnswers;
-        successRateElement.textContent = successRate.toFixed(0);
-        
-        // Add this line to log the completion
-        logGameComplete(correctAnswers, totalPairs, successRate.toFixed(0));
-        
-        // Hide game container and show landing page with results
-        gameContainer.classList.add('hidden');
-        landingContainer.classList.remove('hidden');
-        introSection.classList.add('hidden');
-        resultsSection.classList.remove('hidden');
-    }
+    async function getPlayerPercentile(currentScore) {
+        try {
+          
+          const resultsSnapshot = await firebase.firestore()
+            .collection('game_results')
+            .get();
+          
+          if (resultsSnapshot.empty) {
+            return 0;
+          }
+          
+          let lowerScores = 0;
+          let totalGames = 0;
+          
+          resultsSnapshot.forEach(doc => {
+            const data = doc.data();
+            totalGames++;
+            if (data.score < currentScore) {
+              lowerScores++;
+            }
+          });
+          
+          // Calculate and return the percentile
+          const percentile = Math.round((lowerScores / totalGames) * 100);
+          return percentile;
+        } catch (error) {
+          console.error('Error calculating percentile:', error);
+          return null; // Return null to indicate error
+        }
+      }
+      
+      // Replace the existing showResults function with this updated version
+      async function showResults() {
+          // Calculate success rate
+          const successRate = (correctAnswers / totalPairs) * 100;
+          
+          // Update results elements
+          correctCountElement.textContent = correctAnswers;
+          successRateElement.textContent = successRate.toFixed(0);
+          
+          // Log to Firebase
+          logGameComplete(correctAnswers, totalPairs, successRate.toFixed(0));
+          
+          // Calculate and display the player's percentile
+          try {
+              const percentile = await getPlayerPercentile(correctAnswers);
+              if (percentile !== null) {
+                  // Update the percentile element we'll add to the HTML
+                  const percentileElement = document.getElementById('percentile-value');
+                  if (percentileElement) {
+                      percentileElement.textContent = percentile;
+                      document.getElementById('percentile-container').classList.remove('hidden');
+                  }
+              }
+          } catch (error) {
+              console.error("Error getting percentile:", error);
+              // Hide the percentile container if there was an error
+              const percentileContainer = document.getElementById('percentile-container');
+              if (percentileContainer) {
+                  percentileContainer.classList.add('hidden');
+              }
+          }
+          
+          // Hide game container and show landing page with results
+          gameContainer.classList.add('hidden');
+          landingContainer.classList.remove('hidden');
+          introSection.classList.add('hidden');
+          resultsSection.classList.remove('hidden');
+      }
 
     function resetGame() {
         // Reset game variables
