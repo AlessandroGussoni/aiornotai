@@ -211,8 +211,8 @@ function logGameComplete(score, totalQuestions, successRate) {
             loadingMessage.textContent = "Loading game...";
             
             // Count the number of files in each directory
-            const n_ai = 14 - 1
-            const n_real = 15 - 1
+            const n_ai = 18
+            const n_real = 18
             
             // Sample indices based on the counted files
             ai_indices = getUniqueRandomIndices(10, 1, n_ai);

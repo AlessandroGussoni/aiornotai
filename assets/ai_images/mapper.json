@@ -82,5 +82,29 @@
         "Metadata": {
             "prompt": "A bright and sunny afternoon tea scene by the window. An elegant round table is decorated with delicate tea sets, pastries, and fresh flowers. Outside the window, a blooming pink cherry blossom tree fills the view, creating a soft and serene atmosphere. The room is bathed in gentle sunlight, casting soft light and shadows. The colors are vibrant, plum eggplant, deep bard, warm terracotta, pink mist, plum beige, forest green, pastel, and warm. The overall image has a dreamy and elegant illustration style."
         }
+    },
+    "15": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "A gouache painting of three pink cocktails with lime and orange slices, in the style of Maira Kalman. The painting features pastel colors, a cute art style, and a fun vibe, set against a light blue background"
+        }
+    },
+    "16": {
+        "Source": "Artaigallery",
+        "Metadata": {
+            "url": "https://www.artaigallery.com/products/accountable-nature"
+        }
+    },
+    "17": {
+        "Source": "Artaigallery",
+        "Metadata": {
+            "url": "https://www.artaigallery.com/collections/all-items/products/glimmer-of-hope"
+        }
+    },
+    "18": {
+        "Source": "Artaigallery",
+        "Metadata": {
+            "url": "https://www.artaigallery.com/collections/all-items/products/mirror-life"
+        }
     }
 }
