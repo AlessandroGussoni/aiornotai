@@ -1,5 +1,6 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log("Firebase available:", typeof firebase !== 'undefined');
+    const n_ai = 18
+    const n_real = 18
 if (typeof firebase !== 'undefined') {
   console.log("Firebase version:", firebase.SDK_VERSION);
   console.log("Firestore available:", typeof firebase.firestore === 'function');
@@ -211,8 +212,6 @@ function logGameComplete(score, totalQuestions, successRate) {
             loadingMessage.textContent = "Loading game...";
             
             // Count the number of files in each directory
-            const n_ai = 18
-            const n_real = 18
             
             // Sample indices based on the counted files
             ai_indices = getUniqueRandomIndices(10, 1, n_ai);
@@ -643,8 +642,8 @@ function logGameComplete(score, totalQuestions, successRate) {
         
         // Re-initialize game to get fresh indices and load first pair
         // No need to preload images again as they're already cached
-        ai_indices = getUniqueRandomIndices(10, 1, imageCache.aiImages.length);
-        real_indices = getUniqueRandomIndices(10, 1, imageCache.realImages.length);
+        ai_indices = getUniqueRandomIndices(10, 1, n_ai);
+        real_indices = getUniqueRandomIndices(10, 1, n_real);
         loadImagePair();
     }
     
