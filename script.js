@@ -277,7 +277,8 @@ function logGameComplete(score, totalQuestions, successRate) {
                     itemElement.className = 'leaderboard-item';
                     
                     // Round win rate to one decimal place
-                    const winRateDisplay = Math.abs(image.winRate.toFixed(1) - 100);
+                    const winRateValue  = Math.abs(image.winRate.toFixed(1) - 100);
+                    const winRateDisplay = Number(winRateValue.toFixed(2)).toString();
                     
                     itemElement.innerHTML = `
                         <img src="assets/real_images/${image.id}.png" alt="${metadata.Title}">
