@@ -1,16 +1,8 @@
 document.addEventListener('DOMContentLoaded', async () => {
     const n_ai = 18
     const n_real = 18
-if (typeof firebase !== 'undefined') {
-  console.log("Firebase version:", firebase.SDK_VERSION);
-  console.log("Firestore available:", typeof firebase.firestore === 'function');
-  console.log("Analytics available:", typeof firebase.analytics === 'function');
-}
-
 // Enhanced error logging for logGameComplete function
 function logGameComplete(score, totalQuestions, successRate) {
-  console.log("Attempting to log game completion...");
-  console.log("Data to save:", { score, totalQuestions, successRate });
   
   if (typeof firebase === 'undefined') {
     console.error("Firebase is not defined");
@@ -24,10 +16,8 @@ function logGameComplete(score, totalQuestions, successRate) {
       total_questions: totalQuestions,
       success_rate: successRate
     });
-    console.log("Analytics event logged successfully");
     
     // Store in Firestore
-    console.log("Attempting to write to Firestore...");
     firebase.firestore().collection('game_results').add({
       score: score,
       total_questions: totalQuestions,
@@ -35,7 +25,6 @@ function logGameComplete(score, totalQuestions, successRate) {
       timestamp: firebase.firestore.FieldValue.serverTimestamp()
     })
     .then((docRef) => {
-      console.log('Game result saved successfully with ID:', docRef.id);
     })
     .catch((error) => {
       console.error('Error saving to Firestore:', error);
@@ -101,13 +90,70 @@ function logGameComplete(score, totalQuestions, successRate) {
     const loadingProgress = document.getElementById('loading-progress');
     const loadingMessage = document.getElementById('loading-message');
 
+    const showLeaderboardButton = document.getElementById('show-leaderboard');
+    const leaderboardContainer = document.getElementById('leaderboard-container');
+    const leaderboardBackButton = document.getElementById('leaderboard-back');
+    const leaderboardContent = document.getElementById('leaderboard-content');
+
     // Initialize game - only load essential data first
     await initGame();
+
+    if (showLeaderboardButton) {
+        showLeaderboardButton.addEventListener('click', showLeaderboard);
+    }
+    
+    if (leaderboardBackButton) {
+        leaderboardBackButton.addEventListener('click', hideLeaderboard);
+    }
+    
+    // Function to fetch the top 5 real images with highest win rate
+    async function fetchTopRealImages() {
+        try {
+            
+            // Reference to the image_stats collection
+            const imageStatsRef = firebase.firestore().collection('image_stats');
+            
+            // Query all real images
+            const realImagesQuery = await imageStatsRef
+                .where('type', '==', 'real')
+                .get();
+            
+            if (realImagesQuery.empty) {
+                return [];
+            }
+            
+            // Calculate win rate for each real image
+            const imagesWithWinRate = [];
+            
+            realImagesQuery.forEach(doc => {
+                const data = doc.data();
+                // Win rate is the percentage of times the real image was correctly identified as NOT AI
+                // So it's the number of correct identifications divided by total times seen
+                const winRate = data.seen > 0 ? (data.correct / data.seen) * 100 : 0;
+                
+                imagesWithWinRate.push({
+                    id: data.image_id,
+                    seen: data.seen,
+                    correct: data.correct,
+                    winRate: winRate
+                });
+            });
+            
+            // Sort by win rate (highest first)
+            imagesWithWinRate.sort((a, b) => a.winRate - b.winRate);
+            
+            // Return top 3
+            return imagesWithWinRate.slice(0, 3);
+            
+        } catch (error) {
+            console.error('Error fetching top real images:', error);
+            return [];
+        }
+    }
     
     function logGameStart() {
         try {
             firebase.analytics().logEvent('game_start');
-            console.log('Game start logged to analytics');
         } catch (error) {
             console.error('Analytics error:', error);
         }
@@ -130,7 +176,7 @@ function logGameComplete(score, totalQuestions, successRate) {
                 timestamp: firebase.firestore.FieldValue.serverTimestamp()
             })
             .then((docRef) => {
-                console.log('Game result saved with ID:', docRef.id);
+
             })
             .catch((error) => {
                 console.error('Error saving result:', error);
@@ -143,6 +189,7 @@ function logGameComplete(score, totalQuestions, successRate) {
     startGameButton.addEventListener('click', () => {
         startGame();
         logGameStart();
+        initializeImageStatsCollection(); // Add this line
     });
     
     image1Container.addEventListener('click', () => {
@@ -205,6 +252,71 @@ function logGameComplete(score, totalQuestions, successRate) {
         loadImagePair();
     }
     
+    async function showLeaderboard() {
+        try {
+            // Show loading indicator
+            loadingIndicator.classList.remove('hidden');
+            loadingMessage.textContent = "Loading leaderboard...";
+            
+            // Fetch top real images
+            const topRealImages = await fetchTopRealImages();
+            
+            // Clear previous content
+            leaderboardContent.innerHTML = '';
+            
+            if (topRealImages.length === 0) {
+                leaderboardContent.innerHTML = '<p>No data available yet. Play more games!</p>';
+            } else {
+                // Build leaderboard UI
+                for (const image of topRealImages) {
+                    // Get metadata for this real image
+                    const metadata = realImageMetadata[image.id] || { Title: 'Untitled', Author: 'Unknown Artist' };
+                    
+                    // Create leaderboard item
+                    const itemElement = document.createElement('div');
+                    itemElement.className = 'leaderboard-item';
+                    
+                    // Round win rate to one decimal place
+                    const winRateDisplay = Math.abs(image.winRate.toFixed(1) - 100);
+                    
+                    itemElement.innerHTML = `
+                        <img src="assets/real_images/${image.id}.png" alt="${metadata.Title}">
+                        <div class="leaderboard-item-info">
+                            <h3>${metadata.Title}</h3>
+                            <p>Artist: ${metadata.Author}</p>
+                            <p>Identified as real <span class="win-rate">${winRateDisplay}%</span> of the time</p>
+                        </div>
+                    `;
+                    
+                    leaderboardContent.appendChild(itemElement);
+                }
+            }
+            
+            // Hide other containers and show leaderboard
+            landingContainer.classList.add('hidden');
+            gameContainer.classList.add('hidden');
+            leaderboardContainer.classList.remove('hidden');
+            
+            // Hide loading indicator
+            loadingIndicator.classList.add('hidden');
+            
+        } catch (error) {
+            console.error('Error showing leaderboard:', error);
+            loadingIndicator.classList.add('hidden');
+        }
+    }
+    
+    // Function to hide the leaderboard and return to results
+    function hideLeaderboard() {
+        // Hide leaderboard
+        leaderboardContainer.classList.add('hidden');
+        
+        // Show results
+        landingContainer.classList.remove('hidden');
+        resultsSection.classList.remove('hidden');
+    }
+    
+    // Add this function to the initialization code
     async function initGame() {
         try {
             // Show loading indicator
@@ -465,7 +577,7 @@ function logGameComplete(score, totalQuestions, successRate) {
             }
         }
         
-        return Math.max(count, 5); // Ensure we have at least 5 images to sample from
+        return Math.max(count, 3); // Ensure we have at least 5 images to sample from
     }
     
     function getUniqueRandomIndices(count, min, max) {
@@ -524,7 +636,60 @@ function logGameComplete(score, totalQuestions, successRate) {
         image2Container.style.border = '';
     }
 
-    function checkAnswer(selectedPosition) {
+    function logImageStatistics(imageId, isAI, wasCorrectlyIdentified) {
+        try {
+          
+          // Reference to the image_stats collection
+          const imageStatsRef = firebase.firestore().collection('image_stats');
+          const docId = `${isAI ? 'ai' : 'real'}_${imageId}`;
+          
+          // First check if the document exists
+          imageStatsRef.doc(docId).get()
+            .then((docSnapshot) => {
+              if (docSnapshot.exists) {
+                // Document exists, update the counters
+                return imageStatsRef.doc(docId).update({
+                  seen: firebase.firestore.FieldValue.increment(1),
+                  correct: firebase.firestore.FieldValue.increment(wasCorrectlyIdentified ? 1 : 0)
+                });
+              } else {
+                // Document doesn't exist, create it with initial values
+                return imageStatsRef.doc(docId).set({
+                  image_id: imageId,
+                  type: isAI ? 'ai' : 'real',
+                  seen: 1,
+                  correct: wasCorrectlyIdentified ? 1 : 0
+                });
+              }
+            })
+            .then(() => {
+            })
+            .catch(error => {
+              console.error('Error updating image statistics:', error);
+              console.error('Error code:', error.code);
+              console.error('Error message:', error.message);
+            });
+        } catch (error) {
+        }
+      }
+      
+      // 3. Function to initialize the collection explicitly (can help with permission debugging)
+      function initializeImageStatsCollection() {
+        
+        firebase.firestore().collection('image_stats').doc('init')
+          .set({
+            initialized: true,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          })
+          .then(() => {
+          })
+          .catch(error => {
+            console.error("Error initializing collection:", error);
+            console.error("This is likely a permissions issue. Please update your Firestore security rules.");
+          });
+      }
+      
+      function checkAnswer(selectedPosition) {
         const isCorrect = selectedPosition === aiImagePosition;
         
         if (isCorrect) {
@@ -535,6 +700,10 @@ function logGameComplete(score, totalQuestions, successRate) {
         const real_index = real_indices[currentPair - 1];
         const ai_index = ai_indices[currentPair - 1];
         
+        // Log image statistics
+        logImageStatistics(ai_index, true, selectedPosition === aiImagePosition);
+        logImageStatistics(real_index, false, selectedPosition !== aiImagePosition);
+        
         // Store this pair in game history
         gameHistory.push({
             pairNumber: currentPair,
@@ -543,10 +712,10 @@ function logGameComplete(score, totalQuestions, successRate) {
             correct: isCorrect,
             leftImageSrc: image1.src,
             rightImageSrc: image2.src,
-            realIndex: real_index, // Store the real image index for metadata lookup
-            aiIndex: ai_index // Store the AI image index for metadata lookup
+            realIndex: real_index,
+            aiIndex: ai_index
         });
-
+    
         // Move to next pair or show results
         if (currentPair < totalPairs) {
             currentPair++;

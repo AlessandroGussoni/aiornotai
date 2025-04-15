@@ -65,6 +65,7 @@
                 <div class="button-group">
                     <button id="play-again">Play Again</button>
                     <button id="review-game">Review</button>
+                    <button id="show-leaderboard">Leaderboard</button>
                 </div>
             </div>
         </div>
@@ -77,6 +78,16 @@
                 <div class="image-choice" id="image2-container">
                     <img id="image2" src="" alt="Image 2">
                 </div>
+            </div>
+        </div>
+        <div id="leaderboard-container" class="hidden">
+            <div class="leaderboard-header">
+                <button id="leaderboard-back" class="back-button">&larr; Back</button>
+                <h2>Top 3 Human Paintings</h2>
+                <p>Most distinguishable pieces by win rate</p>
+            </div>
+            <div id="leaderboard-content">
+                <!-- Leaderboard items will be added here dynamically -->
             </div>
         </div>
     </div>
@@ -100,7 +111,6 @@
   // Initialize Firebase with compat version
   try {
     firebase.initializeApp(firebaseConfig);
-    console.log("Firebase initialized successfully");
     
     // Test Firestore connection
     firebase.firestore().collection('test').add({
@@ -108,7 +118,6 @@
       timestamp: new Date()
     })
     .then(docRef => {
-      console.log("Test document written with ID: ", docRef.id);
     })
     .catch(error => {
       console.error("Error adding test document: ", error);
