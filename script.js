@@ -1,934 +1,1027 @@
+// Modular organization using IIFE pattern
 document.addEventListener('DOMContentLoaded', async () => {
-    const n_ai = 18
-    const n_real = 18
-// Enhanced error logging for logGameComplete function
-function logGameComplete(score, totalQuestions, successRate) {
-  
-  if (typeof firebase === 'undefined') {
-    console.error("Firebase is not defined");
-    return;
-  }
-  
-  try {
-    // Log to Analytics
-    firebase.analytics().logEvent('game_complete', {
-      score: score,
-      total_questions: totalQuestions,
-      success_rate: successRate
-    });
-    
-    // Store in Firestore
-    firebase.firestore().collection('game_results').add({
-      score: score,
-      total_questions: totalQuestions,
-      success_rate: successRate,
-      timestamp: firebase.firestore.FieldValue.serverTimestamp()
-    })
-    .then((docRef) => {
-    })
-    .catch((error) => {
-      console.error('Error saving to Firestore:', error);
-      console.error('Error code:', error.code);
-      console.error('Error message:', error.message);
-    });
-  } catch (error) {
-    console.error("Critical error in logGameComplete:", error);
-  }
-}
-    // Game variables
-    const totalPairs = 10;
-    let currentPair = 1;
-    let correctAnswers = 0;
-    let aiImagePosition = null; // 'left' or 'right'
-    let ai_indices = [];    // Indices for AI images
-    let real_indices = [];  // Indices for Real images
-    let realImageMetadata = {}; // Store the real artwork metadata
-    let aiImageMetadata = {}; // Store the AI image metadata
-    
-    // New variables for review functionality
-    let gameHistory = []; // To store played pairs
-    let reviewMode = false;
-    let reviewIndex = 0;
+    // Config & Constants
+    const CONFIG = {
+        totalPairs: 10,
+        aiImagesCount: 18,
+        realImagesCount: 18,
+        backgroundRotationInterval: 20000, // 20 seconds
+        backgrounds: [
+            'assets/backgrounds/1.png',
+            'assets/backgrounds/2.png',
+            'assets/backgrounds/3.png',
+            'assets/backgrounds/4.png'
+        ]
+    };
 
-    // Background rotation variables
-    const backgrounds = [
-        'assets/backgrounds/1.png',
-        'assets/backgrounds/2.png',
-        'assets/backgrounds/3.png',
-        'assets/backgrounds/4.png'
-    ];
-    let currentBgIndex = 0;
-    let bgRotationInterval = null;
+    // DOM elements - cached for performance
+    const DOM = {
+        // Containers
+        landingContainer: document.getElementById('landing-container'),
+        introSection: document.getElementById('intro-section'),
+        resultsSection: document.getElementById('results-section'),
+        gameContainer: document.getElementById('game-container'),
+        backgroundContainer: document.getElementById('background-container'),
+        loadingIndicator: document.getElementById('loading-indicator'),
+        leaderboardContainer: document.getElementById('leaderboard-container'),
+        leaderboardContent: document.getElementById('leaderboard-content'),
+        
+        // Interactive elements
+        startGameButton: document.getElementById('start-game'),
+        image1Container: document.getElementById('image1-container'),
+        image2Container: document.getElementById('image2-container'),
+        image1: document.getElementById('image1'),
+        image2: document.getElementById('image2'),
+        correctCountElement: document.getElementById('correct-count'),
+        successRateElement: document.getElementById('success-rate'),
+        playAgainButton: document.getElementById('play-again'),
+        reviewGameButton: document.getElementById('review-game'),
+        showLeaderboardButton: document.getElementById('show-leaderboard'),
+        leaderboardBackButton: document.getElementById('leaderboard-back'),
+        
+        // Loading elements
+        loadingProgress: document.getElementById('loading-progress'),
+        loadingMessage: document.getElementById('loading-message'),
+        
+        // Result elements
+        percentileContainer: document.getElementById('percentile-container'),
+        percentileValue: document.getElementById('percentile-value')
+    };
 
-    // Loading state tracking
-    let isBackgroundLoading = false;
-    let backgroundLoadPromise = null;
+    // Game state
+    const GameState = {
+        currentPair: 1,
+        correctAnswers: 0,
+        aiImagePosition: null,
+        ai_indices: [],
+        real_indices: [],
+        realImageMetadata: {},
+        aiImageMetadata: {},
+        gameHistory: [],
+        reviewMode: false,
+        reviewIndex: 0,
+        currentBgIndex: 0,
+        bgRotationInterval: null,
+        isBackgroundLoading: false,
+        backgroundLoadPromise: null
+    };
 
-    // Preloaded image cache
-    const imageCache = {
+    // Image cache
+    const ImageCache = {
         backgrounds: [],
         aiImages: [],
         realImages: []
     };
 
-    // DOM elements
-    const landingContainer = document.getElementById('landing-container');
-    const introSection = document.getElementById('intro-section');
-    const resultsSection = document.getElementById('results-section');
-    const startGameButton = document.getElementById('start-game');
-    const image1Container = document.getElementById('image1-container');
-    const image2Container = document.getElementById('image2-container');
-    const image1 = document.getElementById('image1');
-    const image2 = document.getElementById('image2');
-    const gameContainer = document.getElementById('game-container');
-    const correctCountElement = document.getElementById('correct-count');
-    const successRateElement = document.getElementById('success-rate');
-    const playAgainButton = document.getElementById('play-again');
-    const reviewGameButton = document.getElementById('review-game'); // New button
-    const backgroundContainer = document.getElementById('background-container');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const loadingProgress = document.getElementById('loading-progress');
-    const loadingMessage = document.getElementById('loading-message');
+    // ==================
+    // FIREBASE MODULE
+    // ==================
+    const FirebaseManager = (() => {
+        function checkFirebaseAvailability() {
+            if (typeof firebase === 'undefined') {
+                console.error("Firebase is not defined");
+                return false;
+            }
+            return true;
+        }
 
-    const showLeaderboardButton = document.getElementById('show-leaderboard');
-    const leaderboardContainer = document.getElementById('leaderboard-container');
-    const leaderboardBackButton = document.getElementById('leaderboard-back');
-    const leaderboardContent = document.getElementById('leaderboard-content');
-
-    // Initialize game - only load essential data first
-    await initGame();
-
-    if (showLeaderboardButton) {
-        showLeaderboardButton.addEventListener('click', showLeaderboard);
-    }
-    
-    if (leaderboardBackButton) {
-        leaderboardBackButton.addEventListener('click', hideLeaderboard);
-    }
-    
-    // Function to fetch the top 5 real images with highest win rate
-    async function fetchTopRealImages() {
-        try {
+        function logEvent(eventName, params = {}) {
+            if (!checkFirebaseAvailability()) return;
             
-            // Reference to the image_stats collection
-            const imageStatsRef = firebase.firestore().collection('image_stats');
+            try {
+                firebase.analytics().logEvent(eventName, params);
+            } catch (error) {
+                console.error(`Analytics error logging ${eventName}:`, error);
+            }
+        }
+        
+        async function saveToFirestore(collection, data) {
+            if (!checkFirebaseAvailability()) return null;
             
-            // Query all real images
-            const realImagesQuery = await imageStatsRef
-                .where('type', '==', 'real')
-                .get();
+            try {
+                const docRef = await firebase.firestore().collection(collection).add({
+                    ...data,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                });
+                return docRef;
+            } catch (error) {
+                console.error(`Error saving to Firestore (${collection}):`, error);
+                console.error('Error code:', error.code);
+                console.error('Error message:', error.message);
+                return null;
+            }
+        }
+        
+        function initializeCollection(collection) {
+            if (!checkFirebaseAvailability()) return;
             
-            if (realImagesQuery.empty) {
+            firebase.firestore().collection(collection).doc('init')
+                .set({
+                    initialized: true,
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                })
+                .catch(error => {
+                    console.error(`Error initializing collection ${collection}:`, error);
+                });
+        }
+        
+        async function getDocumentById(collection, docId) {
+            if (!checkFirebaseAvailability()) return null;
+            
+            try {
+                const docRef = await firebase.firestore().collection(collection).doc(docId).get();
+                return docRef.exists ? docRef.data() : null;
+            } catch (error) {
+                console.error(`Error fetching document ${docId}:`, error);
+                return null;
+            }
+        }
+        
+        async function updateDocument(collection, docId, data) {
+            if (!checkFirebaseAvailability()) return false;
+            
+            try {
+                await firebase.firestore().collection(collection).doc(docId).update(data);
+                return true;
+            } catch (error) {
+                console.error(`Error updating document ${docId}:`, error);
+                return false;
+            }
+        }
+        
+        async function createDocument(collection, docId, data) {
+            if (!checkFirebaseAvailability()) return false;
+            
+            try {
+                await firebase.firestore().collection(collection).doc(docId).set(data);
+                return true;
+            } catch (error) {
+                console.error(`Error creating document ${docId}:`, error);
+                return false;
+            }
+        }
+        
+        async function queryCollection(collection, queryFn) {
+            if (!checkFirebaseAvailability()) return [];
+            
+            try {
+                const query = queryFn(firebase.firestore().collection(collection));
+                const snapshot = await query.get();
+                
+                if (snapshot.empty) return [];
+                
+                const results = [];
+                snapshot.forEach(doc => results.push({ id: doc.id, ...doc.data() }));
+                return results;
+            } catch (error) {
+                console.error(`Error querying collection ${collection}:`, error);
                 return [];
             }
-            
-            // Calculate win rate for each real image
-            const imagesWithWinRate = [];
-            
-            realImagesQuery.forEach(doc => {
-                const data = doc.data();
-                // Win rate is the percentage of times the real image was correctly identified as NOT AI
-                // So it's the number of correct identifications divided by total times seen
-                const winRate = data.seen > 0 ? (data.correct / data.seen) * 100 : 0;
-                
-                imagesWithWinRate.push({
-                    id: data.image_id,
-                    seen: data.seen,
-                    correct: data.correct,
-                    winRate: winRate
-                });
-            });
-            
-            // Sort by win rate (highest first)
-            imagesWithWinRate.sort((a, b) => a.winRate - b.winRate);
-            
-            // Return top 3
-            return imagesWithWinRate.slice(0, 3);
-            
-        } catch (error) {
-            console.error('Error fetching top real images:', error);
-            return [];
         }
-    }
-    
-    function logGameStart() {
-        try {
-            firebase.analytics().logEvent('game_start');
-        } catch (error) {
-            console.error('Analytics error:', error);
+        
+        return {
+            logEvent,
+            saveToFirestore,
+            initializeCollection,
+            getDocumentById,
+            updateDocument,
+            createDocument,
+            queryCollection
+        };
+    })();
+
+    // ==================
+    // GAME ANALYTICS
+    // ==================
+    const GameAnalytics = (() => {
+        function logGameStart() {
+            FirebaseManager.logEvent('game_start');
         }
-    }
-    
-    function logGameComplete(score, totalQuestions, successRate) {
-        try {
-            // Log to Analytics
-            firebase.analytics().logEvent('game_complete', {
-                score: score,
+        
+        function logGameComplete(score, totalQuestions, successRate) {
+            FirebaseManager.logEvent('game_complete', {
+                score,
                 total_questions: totalQuestions,
                 success_rate: successRate
             });
             
-            // Store in Firestore
-            firebase.firestore().collection('game_results').add({
-                score: score,
+            FirebaseManager.saveToFirestore('game_results', {
+                score,
                 total_questions: totalQuestions,
-                success_rate: successRate,
-                timestamp: firebase.firestore.FieldValue.serverTimestamp()
-            })
-            .then((docRef) => {
-
-            })
-            .catch((error) => {
-                console.error('Error saving result:', error);
+                success_rate: successRate
             });
-        } catch (error) {
-            console.error('Analytics error:', error);
         }
-    }
-
-    startGameButton.addEventListener('click', () => {
-        startGame();
-        logGameStart();
-        initializeImageStatsCollection(); // Add this line
-    });
-    
-    image1Container.addEventListener('click', () => {
-        if (reviewMode) {
-            nextReviewPair();
-        } else {
-            checkAnswer('left');
-        }
-    });
-    
-    image2Container.addEventListener('click', () => {
-        if (reviewMode) {
-            nextReviewPair();
-        } else {
-            checkAnswer('right');
-        }
-    });
-
-    playAgainButton.addEventListener('click', resetGame);
-    reviewGameButton.addEventListener('click', startReview); // New event listener
-
-    // Functions
-    async function startGame() {
-        // Reset game history
-        gameHistory = [];
         
-        // Hide landing page
-        landingContainer.classList.add('hidden');
-        
-        // If we need to preload the first pair, show loading
-        if (!isPairPreloaded(currentPair)) {
-            loadingMessage.textContent = "Loading first images...";
-            loadingIndicator.classList.remove('hidden');
+        function logImageStatistics(imageId, isAI, wasCorrectlyIdentified) {
+            const docId = `${isAI ? 'ai' : 'real'}_${imageId}`;
+            const collection = 'image_stats';
             
-            // Preload just the first pair
-            await preloadSpecificPair(currentPair);
-            
-            // Hide loading when done
-            loadingIndicator.classList.add('hidden');
+            FirebaseManager.getDocumentById(collection, docId)
+                .then(doc => {
+                    if (doc) {
+                        return FirebaseManager.updateDocument(collection, docId, {
+                            seen: firebase.firestore.FieldValue.increment(1),
+                            correct: firebase.firestore.FieldValue.increment(wasCorrectlyIdentified ? 1 : 0)
+                        });
+                    } else {
+                        return FirebaseManager.createDocument(collection, docId, {
+                            image_id: imageId,
+                            type: isAI ? 'ai' : 'real',
+                            seen: 1,
+                            correct: wasCorrectlyIdentified ? 1 : 0
+                        });
+                    }
+                });
         }
         
-        // Show game
-        gameContainer.classList.remove('hidden');
-        
-        // Reset game state
-        currentPair = 1;
-        correctAnswers = 0;
-        reviewMode = false;
-        
-        // Init background rotation if not already started
-        if (!bgRotationInterval) {
-            initBackgroundRotation();
+        function initializeImageStats() {
+            FirebaseManager.initializeCollection('image_stats');
         }
         
-        // Start background loading the rest of the images if not already loading
-        if (!isBackgroundLoading) {
-            startBackgroundImageLoading();
-        }
-        
-        loadImagePair();
-    }
-    
-    async function showLeaderboard() {
-        try {
-            // Show loading indicator
-            loadingIndicator.classList.remove('hidden');
-            loadingMessage.textContent = "Loading leaderboard...";
+        async function getPlayerPercentile(currentScore) {
+            const results = await FirebaseManager.queryCollection('game_results', 
+                collection => collection);
             
-            // Fetch top real images
-            const topRealImages = await fetchTopRealImages();
+            if (results.length === 0) return 0;
             
-            // Clear previous content
-            leaderboardContent.innerHTML = '';
-            
-            if (topRealImages.length === 0) {
-                leaderboardContent.innerHTML = '<p>No data available yet. Play more games!</p>';
-            } else {
-                // Build leaderboard UI
-                for (const image of topRealImages) {
-                    // Get metadata for this real image
-                    const metadata = realImageMetadata[image.id] || { Title: 'Untitled', Author: 'Unknown Artist' };
-                    
-                    // Create leaderboard item
-                    const itemElement = document.createElement('div');
-                    itemElement.className = 'leaderboard-item';
-                    
-                    // Round win rate to one decimal place
-                    const winRateValue  = Math.abs(image.winRate.toFixed(1) - 100);
-                    const winRateDisplay = Number(winRateValue.toFixed(2)).toString();
-                    
-                    itemElement.innerHTML = `
-                        <img src="assets/real_images/${image.id}.png" alt="${metadata.Title}">
-                        <div class="leaderboard-item-info">
-                            <h3>${metadata.Title}</h3>
-                            <p>Artist: ${metadata.Author}</p>
-                            <p>Identified as real <span class="win-rate">${winRateDisplay}%</span> of the time</p>
-                        </div>
-                    `;
-                    
-                    leaderboardContent.appendChild(itemElement);
+            let lowerScores = 0;
+            results.forEach(data => {
+                if (data.score < currentScore) {
+                    lowerScores++;
                 }
-            }
-            
-            // Hide other containers and show leaderboard
-            landingContainer.classList.add('hidden');
-            gameContainer.classList.add('hidden');
-            leaderboardContainer.classList.remove('hidden');
-            
-            // Hide loading indicator
-            loadingIndicator.classList.add('hidden');
-            
-        } catch (error) {
-            console.error('Error showing leaderboard:', error);
-            loadingIndicator.classList.add('hidden');
-        }
-    }
-    
-    // Function to hide the leaderboard and return to results
-    function hideLeaderboard() {
-        // Hide leaderboard
-        leaderboardContainer.classList.add('hidden');
-        
-        // Show results
-        landingContainer.classList.remove('hidden');
-        resultsSection.classList.remove('hidden');
-    }
-    
-    // Add this function to the initialization code
-    async function initGame() {
-        try {
-            // Show loading indicator
-            loadingIndicator.classList.remove('hidden');
-            loadingMessage.textContent = "Loading game...";
-            
-            // Count the number of files in each directory
-            
-            // Sample indices based on the counted files
-            ai_indices = getUniqueRandomIndices(10, 1, n_ai);
-            real_indices = getUniqueRandomIndices(10, 1, n_real);
-            
-            // Load the artwork metadata
-            await loadArtworkMetadata();
-            
-            // Preload only the first background image and first pair of game images
-            await preloadEssentialImages();
-            
-            // Initialize first background
-            initFirstBackground();
-            
-            // Hide loading indicator when essentials are loaded
-            loadingIndicator.classList.add('hidden');
-            
-            // Start loading the rest of the images in the background
-            startBackgroundImageLoading();
-            
-        } catch (error) {
-            console.error('Error initializing game:', error);
-            loadingIndicator.classList.add('hidden');
-        }
-    }
-    
-    // Preload only essential images to start quickly
-    async function preloadEssentialImages() {
-        // Preload only first background image
-        await preloadImage(backgrounds[0]).then(img => {
-            if (img) imageCache.backgrounds[0] = img;
-        });
-        
-        // Preload first pair of images
-        const firstPair = 1;
-        await preloadSpecificPair(firstPair);
-        
-    }
-    
-    // Start background loading of remaining images
-    function startBackgroundImageLoading() {
-        if (isBackgroundLoading) return;
-        
-        isBackgroundLoading = true;
-        
-        backgroundLoadPromise = new Promise(async (resolve) => {
-            
-            // Background load remaining backgrounds (skip the first one)
-            for (let i = 1; i < backgrounds.length; i++) {
-                if (!imageCache.backgrounds[i]) {
-                    preloadImage(backgrounds[i]).then(img => {
-                        if (img) imageCache.backgrounds[i] = img;
-                    });
-                }
-            }
-            
-            // Background load all game images
-            for (let i = 2; i <= totalPairs; i++) {
-                if (!isPairPreloaded(i)) {
-                    // We don't await this, it happens in the background
-                    preloadSpecificPair(i, false);
-                }
-            }
-            
-            resolve();
-        });
-    }
-    
-    // Check if a specific pair is already loaded
-    function isPairPreloaded(pairNum) {
-        if (pairNum < 1 || pairNum > totalPairs) return false;
-        
-        const ai_index = ai_indices[pairNum - 1];
-        const real_index = real_indices[pairNum - 1];
-        
-        return !!(imageCache.aiImages[ai_index] && imageCache.realImages[real_index]);
-    }
-    
-    // Preload a specific pair of images
-    async function preloadSpecificPair(pairNum, waitForCompletion = true) {
-        if (pairNum < 1 || pairNum > totalPairs) return;
-        
-        const ai_index = ai_indices[pairNum - 1];
-        const real_index = real_indices[pairNum - 1];
-        
-        const aiSrc = `assets/ai_images/${ai_index}.png`;
-        const realSrc = `assets/real_images/${real_index}.png`;
-        
-        const aiPromise = imageCache.aiImages[ai_index] ? 
-            Promise.resolve(imageCache.aiImages[ai_index]) : 
-            preloadImage(aiSrc).then(img => {
-                if (img) imageCache.aiImages[ai_index] = img;
-                return img;
             });
             
-        const realPromise = imageCache.realImages[real_index] ? 
-            Promise.resolve(imageCache.realImages[real_index]) : 
-            preloadImage(realSrc).then(img => {
-                if (img) imageCache.realImages[real_index] = img;
-                return img;
-            });
-        
-        if (waitForCompletion) {
-            await Promise.all([aiPromise, realPromise]);
+            return Math.round((lowerScores / results.length) * 100);
         }
-    }
-    
-    // Helper function to preload a single image
-    function preloadImage(src) {
-        return new Promise((resolve, reject) => {
-            const img = new Image();
-            img.onload = () => {
-                resolve(img);
-            };
-            img.onerror = () => {
-                console.error(`Failed to load image: ${src}`);
-                // Resolve anyway to continue loading other images
-                resolve(null);
-            };
-            img.src = src;
-        });
-    }
-    
-    // New function to load the artwork metadata
-    async function loadArtworkMetadata() {
-        try {
-            // Load real images metadata
-            const realResponse = await fetch('assets/real_images/mapper.json');
-            if (!realResponse.ok) {
-                throw new Error('Failed to load real artwork metadata');
-            }
-            realImageMetadata = await realResponse.json();
+        
+        async function fetchTopRealImages(limit = 3) {
+            const realImages = await FirebaseManager.queryCollection('image_stats',
+                collection => collection.where('type', '==', 'real'));
             
-            // Load AI images metadata
-            const aiResponse = await fetch('assets/ai_images/mapper.json');
-            if (!aiResponse.ok) {
-                throw new Error('Failed to load AI image metadata');
-            }
-            aiImageMetadata = await aiResponse.json();
-        } catch (error) {
-            console.error('Error loading artwork metadata:', error);
-            // Initialize as empty objects if loading fails
-            realImageMetadata = {};
-            aiImageMetadata = {};
+            if (realImages.length === 0) return [];
+            
+            // Calculate win rate for each real image
+            const imagesWithWinRate = realImages.map(data => {
+                const winRate = data.seen > 0 ? (data.correct / data.seen) * 100 : 0;
+                return {
+                    id: data.image_id,
+                    seen: data.seen,
+                    correct: data.correct,
+                    winRate: winRate
+                };
+            });
+            
+            // Sort by win rate (lowest first, as this is the "most confused for AI" rate)
+            imagesWithWinRate.sort((a, b) => a.winRate - b.winRate);
+            
+            // Return top N
+            return imagesWithWinRate.slice(0, limit);
         }
-    }
-    
-    // Initialize just the first background (for fast startup)
-    function initFirstBackground() {
-        addBackgroundLayer(backgrounds[currentBgIndex], true);
-    }
-    
-    // Initialize background rotation system
-    function initBackgroundRotation() {
-        // Set up rotation interval if not already running
-        if (!bgRotationInterval) {
-            bgRotationInterval = setInterval(rotateBackground, 20000); // 20 seconds
-        }
-    }
-    
-    // Add a new background layer
-    function addBackgroundLayer(imageUrl, isActive = false) {
-        const backgroundLayer = document.createElement('div');
-        backgroundLayer.className = 'background-layer';
-        if (isActive) {
-            backgroundLayer.classList.add('active-background');
-        }
-        backgroundLayer.style.backgroundImage = `url(${imageUrl})`;
-        backgroundContainer.appendChild(backgroundLayer);
         
-        // Force repaint to ensure the transition works
-        if (!isActive) {
-            setTimeout(() => {
+        return {
+            logGameStart,
+            logGameComplete,
+            logImageStatistics,
+            initializeImageStats,
+            getPlayerPercentile,
+            fetchTopRealImages
+        };
+    })();
+
+    // ==================
+    // IMAGE MANAGER
+    // ==================
+    const ImageManager = (() => {
+        // Helper function to preload a single image
+        function preloadImage(src) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => resolve(img);
+                img.onerror = () => {
+                    console.error(`Failed to load image: ${src}`);
+                    resolve(null);
+                };
+                img.src = src;
+            });
+        }
+        
+        // Preload only essential images to start quickly
+        async function preloadEssentialImages() {
+            // Preload only first background image
+            const firstBg = CONFIG.backgrounds[0];
+            const bgImg = await preloadImage(firstBg);
+            if (bgImg) ImageCache.backgrounds[0] = bgImg;
+            
+            // Preload first pair of images
+            await preloadSpecificPair(1);
+        }
+        
+        // Start background loading of remaining images
+        function startBackgroundImageLoading() {
+            if (GameState.isBackgroundLoading) return;
+            
+            GameState.isBackgroundLoading = true;
+            
+            GameState.backgroundLoadPromise = new Promise(async (resolve) => {
+                // Background load remaining backgrounds (skip the first one)
+                for (let i = 1; i < CONFIG.backgrounds.length; i++) {
+                    if (!ImageCache.backgrounds[i]) {
+                        preloadImage(CONFIG.backgrounds[i]).then(img => {
+                            if (img) ImageCache.backgrounds[i] = img;
+                        });
+                    }
+                }
+                
+                // Background load all game images
+                for (let i = 2; i <= CONFIG.totalPairs; i++) {
+                    if (!isPairPreloaded(i)) {
+                        // We don't await this, it happens in the background
+                        preloadSpecificPair(i, false);
+                    }
+                }
+                
+                resolve();
+            });
+        }
+        
+        // Check if a specific pair is already loaded
+        function isPairPreloaded(pairNum) {
+            if (pairNum < 1 || pairNum > CONFIG.totalPairs) return false;
+            
+            const ai_index = GameState.ai_indices[pairNum - 1];
+            const real_index = GameState.real_indices[pairNum - 1];
+            
+            return !!(ImageCache.aiImages[ai_index] && ImageCache.realImages[real_index]);
+        }
+        
+        // Preload a specific pair of images
+        async function preloadSpecificPair(pairNum, waitForCompletion = true) {
+            if (pairNum < 1 || pairNum > CONFIG.totalPairs) return;
+            
+            const ai_index = GameState.ai_indices[pairNum - 1];
+            const real_index = GameState.real_indices[pairNum - 1];
+            
+            const aiSrc = `assets/ai_images/${ai_index}.png`;
+            const realSrc = `assets/real_images/${real_index}.png`;
+            
+            const aiPromise = ImageCache.aiImages[ai_index] ? 
+                Promise.resolve(ImageCache.aiImages[ai_index]) : 
+                preloadImage(aiSrc).then(img => {
+                    if (img) ImageCache.aiImages[ai_index] = img;
+                    return img;
+                });
+                
+            const realPromise = ImageCache.realImages[real_index] ? 
+                Promise.resolve(ImageCache.realImages[real_index]) : 
+                preloadImage(realSrc).then(img => {
+                    if (img) ImageCache.realImages[real_index] = img;
+                    return img;
+                });
+            
+            if (waitForCompletion) {
+                await Promise.all([aiPromise, realPromise]);
+            }
+        }
+        
+        // New function to load the artwork metadata
+        async function loadArtworkMetadata() {
+            try {
+                // Load real images metadata
+                const realResponse = await fetch('assets/real_images/mapper.json');
+                if (!realResponse.ok) {
+                    throw new Error('Failed to load real artwork metadata');
+                }
+                GameState.realImageMetadata = await realResponse.json();
+                
+                // Load AI images metadata
+                const aiResponse = await fetch('assets/ai_images/mapper.json');
+                if (!aiResponse.ok) {
+                    throw new Error('Failed to load AI image metadata');
+                }
+                GameState.aiImageMetadata = await aiResponse.json();
+            } catch (error) {
+                console.error('Error loading artwork metadata:', error);
+                // Initialize as empty objects if loading fails
+                GameState.realImageMetadata = {};
+                GameState.aiImageMetadata = {};
+            }
+        }
+        
+        return {
+            preloadImage,
+            preloadEssentialImages,
+            startBackgroundImageLoading,
+            isPairPreloaded,
+            preloadSpecificPair,
+            loadArtworkMetadata
+        };
+    })();
+
+    // ==================
+    // BACKGROUND MANAGER
+    // ==================
+    const BackgroundManager = (() => {
+        // Initialize just the first background (for fast startup)
+        function initFirstBackground() {
+            addBackgroundLayer(CONFIG.backgrounds[GameState.currentBgIndex], true);
+        }
+        
+        // Initialize background rotation system
+        function initBackgroundRotation() {
+            // Set up rotation interval if not already running
+            if (!GameState.bgRotationInterval) {
+                GameState.bgRotationInterval = setInterval(rotateBackground, CONFIG.backgroundRotationInterval);
+            }
+        }
+        
+        // Add a new background layer
+        function addBackgroundLayer(imageUrl, isActive = false) {
+            const backgroundLayer = document.createElement('div');
+            backgroundLayer.className = 'background-layer';
+            if (isActive) {
                 backgroundLayer.classList.add('active-background');
+            }
+            backgroundLayer.style.backgroundImage = `url(${imageUrl})`;
+            DOM.backgroundContainer.appendChild(backgroundLayer);
+            
+            // Force repaint to ensure the transition works
+            if (!isActive) {
+                setTimeout(() => {
+                    backgroundLayer.classList.add('active-background');
+                }, 50);
+            }
+            
+            return backgroundLayer;
+        }
+        
+        // Rotate to next background
+        function rotateBackground() {
+            // Get next background
+            GameState.currentBgIndex = (GameState.currentBgIndex + 1) % CONFIG.backgrounds.length;
+            const nextBgUrl = CONFIG.backgrounds[GameState.currentBgIndex];
+            
+            // Check if image is already preloaded, if not preload it
+            if (!ImageCache.backgrounds[GameState.currentBgIndex]) {
+                ImageManager.preloadImage(nextBgUrl).then(img => {
+                    if (img) ImageCache.backgrounds[GameState.currentBgIndex] = img;
+                    performBackgroundTransition(nextBgUrl);
+                });
+            } else {
+                performBackgroundTransition(nextBgUrl);
+            }
+        }
+        
+        // Perform the actual background transition
+        function performBackgroundTransition(nextBgUrl) {
+            // Get all current background layers
+            const currentLayers = DOM.backgroundContainer.querySelectorAll('.background-layer');
+            
+            // First fade out existing active layers
+            currentLayers.forEach(layer => {
+                if (layer.classList.contains('active-background')) {
+                    layer.classList.remove('active-background');
+                    layer.classList.add('fade-out-background');
+                }
+            });
+            
+            // Add new background layer after a small delay to ensure smooth transition
+            setTimeout(() => {
+                const newLayer = addBackgroundLayer(nextBgUrl);
+                
+                // Clean up old layers after transition completes
+                setTimeout(() => {
+                    const oldLayers = DOM.backgroundContainer.querySelectorAll('.fade-out-background');
+                    oldLayers.forEach(layer => {
+                        DOM.backgroundContainer.removeChild(layer);
+                    });
+                }, 2100); // Slightly longer than the CSS transition
             }, 50);
         }
         
-        return backgroundLayer;
-    }
-    
-    // Rotate to next background
-    function rotateBackground() {
-        // Get next background
-        currentBgIndex = (currentBgIndex + 1) % backgrounds.length;
-        const nextBgUrl = backgrounds[currentBgIndex];
-        
-        // Check if image is already preloaded, if not preload it
-        if (!imageCache.backgrounds[currentBgIndex]) {
-            preloadImage(nextBgUrl).then(img => {
-                if (img) imageCache.backgrounds[currentBgIndex] = img;
-                performBackgroundTransition(nextBgUrl);
-            });
-        } else {
-            performBackgroundTransition(nextBgUrl);
-        }
-    }
-    
-    // Perform the actual background transition
-    function performBackgroundTransition(nextBgUrl) {
-        // Get all current background layers
-        const currentLayers = backgroundContainer.querySelectorAll('.background-layer');
-        
-        // First fade out existing active layers
-        currentLayers.forEach(layer => {
-            if (layer.classList.contains('active-background')) {
-                layer.classList.remove('active-background');
-                layer.classList.add('fade-out-background');
-            }
-        });
-        
-        // Add new background layer after a small delay to ensure smooth transition
-        setTimeout(() => {
-            const newLayer = addBackgroundLayer(nextBgUrl);
-            
-            // Clean up old layers after transition completes
-            setTimeout(() => {
-                const oldLayers = backgroundContainer.querySelectorAll('.fade-out-background');
-                oldLayers.forEach(layer => {
-                    backgroundContainer.removeChild(layer);
-                });
-            }, 2100); // Slightly longer than the CSS transition
-        }, 50);
-    }
-    
-    async function countFilesInDirectories() {
-        // Count files in both directories
-        const aiCount = await countFilesInDirectory('assets/ai_images');
-        const realCount = await countFilesInDirectory('assets/real_images');
-        
-        return [aiCount, realCount];
-    }
-    
-    async function countFilesInDirectory(dirPath) {
-        // This is a JavaScript approximation of os.listdir() length count
-        // We'll check for file existence sequentially
-        let count = 0;
-        const maxCheck = 100; // Safety limit to prevent infinite loop
-        
-        for (let i = 1; i <= maxCheck; i++) {
-            try {
-                // Check if file exists by sending a HEAD request
-                const response = await fetch(`${dirPath}/${i}.png`, { method: 'HEAD' });
-                if (response.ok) {
-                    count = i;
-                } else if (count > 0) {
-                    // If we found files and then got a 404, we can stop
-                    break;
+        return {
+            initFirstBackground,
+            initBackgroundRotation,
+            rotateBackground
+        };
+    })();
+
+    // ==================
+    // UTILS
+    // ==================
+    const Utils = (() => {
+        function getUniqueRandomIndices(count, min, max) {
+            const indices = [];
+            while (indices.length < count) {
+                const randomNum = Math.floor(Math.random() * (max - min + 1)) + min;
+                if (!indices.includes(randomNum)) {
+                    indices.push(randomNum);
                 }
-            } catch (error) {
-                if (count > 0) break;
+            }
+            return indices;
+        }
+        
+        function showElement(element) {
+            if (element) element.classList.remove('hidden');
+        }
+        
+        function hideElement(element) {
+            if (element) element.classList.add('hidden');
+        }
+        
+        return {
+            getUniqueRandomIndices,
+            showElement,
+            hideElement
+        };
+    })();
+
+    // ==================
+    // UI MANAGER
+    // ==================
+    const UIManager = (() => {
+        function showLoading(message = "Loading...") {
+            DOM.loadingMessage.textContent = message;
+            Utils.showElement(DOM.loadingIndicator);
+        }
+        
+        function hideLoading() {
+            Utils.hideElement(DOM.loadingIndicator);
+        }
+        
+        function updateLoadingProgress(percent) {
+            DOM.loadingProgress.style.width = `${percent}%`;
+            DOM.loadingProgress.textContent = `${percent}%`;
+        }
+        
+        function showGameScreen() {
+            Utils.hideElement(DOM.landingContainer);
+            Utils.showElement(DOM.gameContainer);
+        }
+        
+        function showResultsScreen() {
+            Utils.hideElement(DOM.gameContainer);
+            Utils.showElement(DOM.landingContainer);
+            Utils.hideElement(DOM.introSection);
+            Utils.showElement(DOM.resultsSection);
+        }
+        
+        function updateResults(correctCount, totalPairs) {
+            const successRate = (correctCount / totalPairs) * 100;
+            DOM.correctCountElement.textContent = correctCount;
+            DOM.successRateElement.textContent = successRate.toFixed(0);
+        }
+        
+        function updatePercentile(percentile) {
+            if (percentile !== null) {
+                DOM.percentileValue.textContent = percentile;
+                Utils.showElement(DOM.percentileContainer);
+            } else {
+                Utils.hideElement(DOM.percentileContainer);
             }
         }
         
-        return Math.max(count, 3); // Ensure we have at least 5 images to sample from
-    }
-    
-    function getUniqueRandomIndices(count, min, max) {
-        const indices = [];
-        while (indices.length < count) {
-            const randomNum = Math.floor(Math.random() * (max - min + 1)) + min;
-            if (!indices.includes(randomNum)) {
-                indices.push(randomNum);
+        function resetImageContainers() {
+            DOM.image1Container.style.border = '';
+            DOM.image2Container.style.border = '';
+            DOM.image1Container.classList.remove('review-hover-enabled');
+            DOM.image2Container.classList.remove('review-hover-enabled');
+            DOM.image1Container.removeAttribute('data-image-type');
+            DOM.image2Container.removeAttribute('data-image-type');
+        }
+        
+        function showLeaderboard() {
+            Utils.hideElement(DOM.landingContainer);
+            Utils.hideElement(DOM.gameContainer);
+            Utils.showElement(DOM.leaderboardContainer);
+        }
+        
+        function hideLeaderboard() {
+            Utils.hideElement(DOM.leaderboardContainer);
+            Utils.showElement(DOM.landingContainer);
+            Utils.showElement(DOM.resultsSection);
+        }
+        
+        function updateLeaderboard(topImages) {
+            DOM.leaderboardContent.innerHTML = '';
+            
+            if (topImages.length === 0) {
+                DOM.leaderboardContent.innerHTML = '<p>No data available yet. Play more games!</p>';
+                return;
             }
-        }
-        return indices;
-    }
-
-    async function loadImagePair() {
-        // Check if the images for this pair are preloaded
-        if (!isPairPreloaded(currentPair)) {
-            // Show loading indicator if we need to load this pair
-            loadingIndicator.classList.remove('hidden');
-            loadingMessage.textContent = `Loading images...`;
             
-            // Wait for this specific pair to load
-            await preloadSpecificPair(currentPair);
-            
-            // Hide loading indicator
-            loadingIndicator.classList.add('hidden');
-        }
-        
-        // Also preload the next pair in the background (if it exists)
-        if (currentPair < totalPairs && !isPairPreloaded(currentPair + 1)) {
-            preloadSpecificPair(currentPair + 1, false);
-        }
-        
-        // Randomly decide which image will be AI-generated
-        aiImagePosition = Math.random() < 0.5 ? 'left' : 'right';
-        
-        // Get the indices for the current pair
-        const ai_index = ai_indices[currentPair - 1];
-        const real_index = real_indices[currentPair - 1];
-        
-        // Set image sources
-        let leftImageSrc, rightImageSrc;
-        if (aiImagePosition === 'left') {
-            leftImageSrc = `assets/ai_images/${ai_index}.png`;
-            rightImageSrc = `assets/real_images/${real_index}.png`;
-            image1.src = leftImageSrc;
-            image2.src = rightImageSrc;
-        } else {
-            leftImageSrc = `assets/real_images/${real_index}.png`;
-            rightImageSrc = `assets/ai_images/${ai_index}.png`;
-            image1.src = leftImageSrc;
-            image2.src = rightImageSrc;
-        }
-        
-        // Reset any highlighting from review mode
-        image1Container.style.border = '';
-        image2Container.style.border = '';
-    }
-
-    function logImageStatistics(imageId, isAI, wasCorrectlyIdentified) {
-        try {
-          
-          // Reference to the image_stats collection
-          const imageStatsRef = firebase.firestore().collection('image_stats');
-          const docId = `${isAI ? 'ai' : 'real'}_${imageId}`;
-          
-          // First check if the document exists
-          imageStatsRef.doc(docId).get()
-            .then((docSnapshot) => {
-              if (docSnapshot.exists) {
-                // Document exists, update the counters
-                return imageStatsRef.doc(docId).update({
-                  seen: firebase.firestore.FieldValue.increment(1),
-                  correct: firebase.firestore.FieldValue.increment(wasCorrectlyIdentified ? 1 : 0)
-                });
-              } else {
-                // Document doesn't exist, create it with initial values
-                return imageStatsRef.doc(docId).set({
-                  image_id: imageId,
-                  type: isAI ? 'ai' : 'real',
-                  seen: 1,
-                  correct: wasCorrectlyIdentified ? 1 : 0
-                });
-              }
-            })
-            .then(() => {
-            })
-            .catch(error => {
-              console.error('Error updating image statistics:', error);
-              console.error('Error code:', error.code);
-              console.error('Error message:', error.message);
+            topImages.forEach(image => {
+                const metadata = GameState.realImageMetadata[image.id] || { Title: 'Untitled', Author: 'Unknown Artist' };
+                
+                const itemElement = document.createElement('div');
+                itemElement.className = 'leaderboard-item';
+                
+                const winRateValue = Math.abs(image.winRate.toFixed(1) - 100);
+                const winRateDisplay = Number(winRateValue.toFixed(2)).toString();
+                
+                itemElement.innerHTML = `
+                    <img src="assets/real_images/${image.id}.png" alt="${metadata.Title}">
+                    <div class="leaderboard-item-info">
+                        <h3>${metadata.Title}</h3>
+                        <p>Artist: ${metadata.Author}</p>
+                        <p>Identified as real <span class="win-rate">${winRateDisplay}%</span> of the time</p>
+                    </div>
+                `;
+                
+                DOM.leaderboardContent.appendChild(itemElement);
             });
-        } catch (error) {
-        }
-      }
-      
-      // 3. Function to initialize the collection explicitly (can help with permission debugging)
-      function initializeImageStatsCollection() {
-        
-        firebase.firestore().collection('image_stats').doc('init')
-          .set({
-            initialized: true,
-            timestamp: firebase.firestore.FieldValue.serverTimestamp()
-          })
-          .then(() => {
-          })
-          .catch(error => {
-            console.error("Error initializing collection:", error);
-            console.error("This is likely a permissions issue. Please update your Firestore security rules.");
-          });
-      }
-      
-      function checkAnswer(selectedPosition) {
-        const isCorrect = selectedPosition === aiImagePosition;
-        
-        if (isCorrect) {
-            correctAnswers++;
         }
         
-        // Get the current indices for this pair
-        const real_index = real_indices[currentPair - 1];
-        const ai_index = ai_indices[currentPair - 1];
-        
-        // Log image statistics
-        logImageStatistics(ai_index, true, selectedPosition === aiImagePosition);
-        logImageStatistics(real_index, false, selectedPosition !== aiImagePosition);
-        
-        // Store this pair in game history
-        gameHistory.push({
-            pairNumber: currentPair,
-            aiPosition: aiImagePosition,
-            userSelected: selectedPosition,
-            correct: isCorrect,
-            leftImageSrc: image1.src,
-            rightImageSrc: image2.src,
-            realIndex: real_index,
-            aiIndex: ai_index
-        });
-    
-        // Move to next pair or show results
-        if (currentPair < totalPairs) {
-            currentPair++;
-            loadImagePair();
-        } else {
-            showResults();
-        }
-    }
+        return {
+            showLoading,
+            hideLoading,
+            updateLoadingProgress,
+            showGameScreen,
+            showResultsScreen,
+            updateResults,
+            updatePercentile,
+            resetImageContainers,
+            showLeaderboard,
+            hideLeaderboard,
+            updateLeaderboard
+        };
+    })();
 
-    async function getPlayerPercentile(currentScore) {
-        try {
-          
-          const resultsSnapshot = await firebase.firestore()
-            .collection('game_results')
-            .get();
-          
-          if (resultsSnapshot.empty) {
-            return 0;
-          }
-          
-          let lowerScores = 0;
-          let totalGames = 0;
-          
-          resultsSnapshot.forEach(doc => {
-            const data = doc.data();
-            totalGames++;
-            if (data.score < currentScore) {
-              lowerScores++;
+    // ==================
+    // GAME CORE
+    // ==================
+    const GameCore = (() => {
+        async function initGame() {
+            try {
+                UIManager.showLoading("Loading game...");
+                
+                // Sample indices based on the counted files
+                GameState.ai_indices = Utils.getUniqueRandomIndices(
+                    CONFIG.totalPairs, 1, CONFIG.aiImagesCount);
+                GameState.real_indices = Utils.getUniqueRandomIndices(
+                    CONFIG.totalPairs, 1, CONFIG.realImagesCount);
+                
+                // Load the artwork metadata
+                await ImageManager.loadArtworkMetadata();
+                
+                // Preload only the first background image and first pair of game images
+                await ImageManager.preloadEssentialImages();
+                
+                // Initialize first background
+                BackgroundManager.initFirstBackground();
+                
+                // Hide loading indicator when essentials are loaded
+                UIManager.hideLoading();
+                
+                // Start loading the rest of the images in the background
+                ImageManager.startBackgroundImageLoading();
+                
+            } catch (error) {
+                console.error('Error initializing game:', error);
+                UIManager.hideLoading();
             }
-          });
-          
-          // Calculate and return the percentile
-          const percentile = Math.round((lowerScores / totalGames) * 100);
-          return percentile;
-        } catch (error) {
-          console.error('Error calculating percentile:', error);
-          return null; // Return null to indicate error
-        }
-      }
-      
-      // Replace the existing showResults function with this updated version
-      async function showResults() {
-          // Calculate success rate
-          const successRate = (correctAnswers / totalPairs) * 100;
-          
-          // Update results elements
-          correctCountElement.textContent = correctAnswers;
-          successRateElement.textContent = successRate.toFixed(0);
-          
-          // Log to Firebase
-          logGameComplete(correctAnswers, totalPairs, successRate.toFixed(0));
-          
-          // Calculate and display the player's percentile
-          try {
-              const percentile = await getPlayerPercentile(correctAnswers);
-              if (percentile !== null) {
-                  // Update the percentile element we'll add to the HTML
-                  const percentileElement = document.getElementById('percentile-value');
-                  if (percentileElement) {
-                      percentileElement.textContent = percentile;
-                      document.getElementById('percentile-container').classList.remove('hidden');
-                  }
-              }
-          } catch (error) {
-              console.error("Error getting percentile:", error);
-              // Hide the percentile container if there was an error
-              const percentileContainer = document.getElementById('percentile-container');
-              if (percentileContainer) {
-                  percentileContainer.classList.add('hidden');
-              }
-          }
-          
-          // Hide game container and show landing page with results
-          gameContainer.classList.add('hidden');
-          landingContainer.classList.remove('hidden');
-          introSection.classList.add('hidden');
-          resultsSection.classList.remove('hidden');
-      }
-
-    function resetGame() {
-        // Reset game variables
-        currentPair = 1;
-        correctAnswers = 0;
-        gameHistory = [];
-        reviewMode = false;
-        
-        // Hide the results section
-        landingContainer.classList.add('hidden');
-        resultsSection.classList.add('hidden');
-        
-        // Show the game container directly
-        gameContainer.classList.remove('hidden');
-        
-        // Re-initialize game to get fresh indices and load first pair
-        // No need to preload images again as they're already cached
-        ai_indices = getUniqueRandomIndices(10, 1, n_ai);
-        real_indices = getUniqueRandomIndices(10, 1, n_real);
-        loadImagePair();
-    }
-    
-    // New functions for review functionality
-    function startReview() {
-        // Switch to review mode
-        reviewMode = true;
-        reviewIndex = 0;
-        
-        // Hide results and show game container
-        landingContainer.classList.add('hidden');
-        gameContainer.classList.remove('hidden');
-        
-        
-        // Load the first pair in review mode
-        loadReviewPair();
-    }
-    
-    function loadReviewPair() {
-        if (reviewIndex >= gameHistory.length) {
-            // End of review, go back to results
-            endReview();
-            return;
         }
         
-        const pairData = gameHistory[reviewIndex];
-        
-        // Set image sources
-        image1.src = pairData.leftImageSrc;
-        image2.src = pairData.rightImageSrc;
-        
-        // Reset any previous highlighting
-        image1Container.style.border = '';
-        image2Container.style.border = '';
-        
-        // Add review hover class to both containers
-        image1Container.classList.add('review-hover-enabled');
-        image2Container.classList.add('review-hover-enabled');
-        
-        // Get the real and AI image metadata
-        const realIndex = pairData.realIndex;
-        const aiIndex = pairData.aiIndex;
-        const realMetadata = realImageMetadata[realIndex];
-        const aiMetadata = aiImageMetadata[aiIndex];
-        
-        // Prepare AI metadata text
-        let aiMetadataText = 'AI Generated';
-        if (aiMetadata) {
-            aiMetadataText = `Source: ${aiMetadata.Source}`;
+        async function startGame() {
+            // Reset game history
+            GameState.gameHistory = [];
+            GameState.currentPair = 1;
+            GameState.correctAnswers = 0;
+            GameState.reviewMode = false;
             
-            // Add prompt or URL based on what's available
-            if (aiMetadata.Metadata) {
-                if (aiMetadata.Metadata.url) {
+            // Hide landing page
+            Utils.hideElement(DOM.landingContainer);
+            
+            // If we need to preload the first pair, show loading
+            if (!ImageManager.isPairPreloaded(GameState.currentPair)) {
+                UIManager.showLoading("Loading first images...");
+                
+                // Preload just the first pair
+                await ImageManager.preloadSpecificPair(GameState.currentPair);
+                
+                // Hide loading when done
+                UIManager.hideLoading();
+            }
+            
+            // Show game
+            Utils.showElement(DOM.gameContainer);
+            
+            // Init background rotation if not already started
+            if (!GameState.bgRotationInterval) {
+                BackgroundManager.initBackgroundRotation();
+            }
+            
+            // Start background loading the rest of the images if not already loading
+            if (!GameState.isBackgroundLoading) {
+                ImageManager.startBackgroundImageLoading();
+            }
+            
+            // Log analytics
+            GameAnalytics.logGameStart();
+            GameAnalytics.initializeImageStats();
+            
+            loadImagePair();
+        }
+        
+        async function loadImagePair() {
+            // Check if the images for this pair are preloaded
+            if (!ImageManager.isPairPreloaded(GameState.currentPair)) {
+                // Show loading indicator if we need to load this pair
+                UIManager.showLoading(`Loading images...`);
+                
+                // Wait for this specific pair to load
+                await ImageManager.preloadSpecificPair(GameState.currentPair);
+                
+                // Hide loading indicator
+                UIManager.hideLoading();
+            }
+            
+            // Also preload the next pair in the background (if it exists)
+            if (GameState.currentPair < CONFIG.totalPairs && 
+                !ImageManager.isPairPreloaded(GameState.currentPair + 1)) {
+                ImageManager.preloadSpecificPair(GameState.currentPair + 1, false);
+            }
+            
+            // Randomly decide which image will be AI-generated
+            GameState.aiImagePosition = Math.random() < 0.5 ? 'left' : 'right';
+            
+            // Get the indices for the current pair
+            const ai_index = GameState.ai_indices[GameState.currentPair - 1];
+            const real_index = GameState.real_indices[GameState.currentPair - 1];
+            
+            // Set image sources
+            if (GameState.aiImagePosition === 'left') {
+                DOM.image1.src = `assets/ai_images/${ai_index}.png`;
+                DOM.image2.src = `assets/real_images/${real_index}.png`;
+            } else {
+                DOM.image1.src = `assets/real_images/${real_index}.png`;
+                DOM.image2.src = `assets/ai_images/${ai_index}.png`;
+            }
+            
+            // Reset any highlighting
+            UIManager.resetImageContainers();
+        }
+        
+        function checkAnswer(selectedPosition) {
+            const isCorrect = selectedPosition === GameState.aiImagePosition;
+            
+            if (isCorrect) {
+                GameState.correctAnswers++;
+            }
+            
+            // Get the current indices for this pair
+            const real_index = GameState.real_indices[GameState.currentPair - 1];
+            const ai_index = GameState.ai_indices[GameState.currentPair - 1];
+            
+            // Log image statistics
+            GameAnalytics.logImageStatistics(ai_index, true, selectedPosition === GameState.aiImagePosition);
+            GameAnalytics.logImageStatistics(real_index, false, selectedPosition !== GameState.aiImagePosition);
+            
+            // Store this pair in game history
+            GameState.gameHistory.push({
+                pairNumber: GameState.currentPair,
+                aiPosition: GameState.aiImagePosition,
+                userSelected: selectedPosition,
+                correct: isCorrect,
+                leftImageSrc: DOM.image1.src,
+                rightImageSrc: DOM.image2.src,
+                realIndex: real_index,
+                aiIndex: ai_index
+            });
+        
+            // Move to next pair or show results
+            if (GameState.currentPair < CONFIG.totalPairs) {
+                GameState.currentPair++;
+                loadImagePair();
+            } else {
+                showResults();
+            }
+        }
+        
+        async function showResults() {
+            // Calculate success rate
+            const successRate = (GameState.correctAnswers / CONFIG.totalPairs) * 100;
+            
+            // Update results elements
+            UIManager.updateResults(GameState.correctAnswers, CONFIG.totalPairs);
+            
+            // Log to Firebase
+            GameAnalytics.logGameComplete(
+                GameState.correctAnswers, 
+                CONFIG.totalPairs, 
+                successRate.toFixed(0)
+            );
+            
+            // Calculate and display the player's percentile
+            try {
+                const percentile = await GameAnalytics.getPlayerPercentile(GameState.correctAnswers);
+                UIManager.updatePercentile(percentile);
+            } catch (error) {
+                console.error("Error getting percentile:", error);
+                UIManager.updatePercentile(null);
+            }
+            
+            // Show results screen
+            UIManager.showResultsScreen();
+        }
+        
+        function resetGame() {
+            // Reset game variables
+            GameState.currentPair = 1;
+            GameState.correctAnswers = 0;
+            GameState.gameHistory = [];
+            GameState.reviewMode = false;
+            
+            // Hide the results section
+            Utils.hideElement(DOM.landingContainer);
+            Utils.hideElement(DOM.resultsSection);
+            
+            // Show the game container directly
+            Utils.showElement(DOM.gameContainer);
+            
+            // Re-initialize game to get fresh indices and load first pair
+            GameState.ai_indices = Utils.getUniqueRandomIndices(
+                CONFIG.totalPairs, 1, CONFIG.aiImagesCount);
+            GameState.real_indices = Utils.getUniqueRandomIndices(
+                CONFIG.totalPairs, 1, CONFIG.realImagesCount);
+                
+            loadImagePair();
+        }
+        
+        async function handleShowLeaderboard() {
+            try {
+                UIManager.showLoading("Loading leaderboard...");
+                
+                // Fetch top real images
+                const topRealImages = await GameAnalytics.fetchTopRealImages();
+                
+                // Update the leaderboard UI
+                UIManager.updateLeaderboard(topRealImages);
+                
+                // Show leaderboard screen
+                UIManager.showLeaderboard();
+                
+                // Hide loading indicator
+                UIManager.hideLoading();
+                
+            } catch (error) {
+                console.error('Error showing leaderboard:', error);
+                UIManager.hideLoading();
+            }
+        }
+        
+        // Review mode functions
+        function startReview() {
+            // Switch to review mode
+            GameState.reviewMode = true;
+            GameState.reviewIndex = 0;
+            
+            // Hide results and show game container
+            Utils.hideElement(DOM.landingContainer);
+            Utils.showElement(DOM.gameContainer);
+            
+            // Load the first pair in review mode
+            loadReviewPair();
+        }
+        
+        function loadReviewPair() {
+            if (GameState.reviewIndex >= GameState.gameHistory.length) {
+                // End of review, go back to results
+                endReview();
+                return;
+            }
+            
+            const pairData = GameState.gameHistory[GameState.reviewIndex];
+            
+            // Set image sources
+            DOM.image1.src = pairData.leftImageSrc;
+            DOM.image2.src = pairData.rightImageSrc;
+            
+            // Reset any previous highlighting
+            DOM.image1Container.style.border = '';
+            DOM.image2Container.style.border = '';
+            
+            // Add review hover class to both containers
+            DOM.image1Container.classList.add('review-hover-enabled');
+            DOM.image2Container.classList.add('review-hover-enabled');
+            
+            // Get the real and AI image metadata
+            const realIndex = pairData.realIndex;
+            const aiIndex = pairData.aiIndex;
+            const realMetadata = GameState.realImageMetadata[realIndex];
+            const aiMetadata = GameState.aiImageMetadata[aiIndex];
+            
+            // Prepare AI metadata text
+            let aiMetadataText = 'AI Generated';
+            if (aiMetadata) {
+                aiMetadataText = `Source: ${aiMetadata.Source}`;
+                
+                // Add prompt or URL based on what's available
+                if (aiMetadata.Metadata && aiMetadata.Metadata.url) {
                     aiMetadataText += `\nURL: ${aiMetadata.Metadata.url}`;
                 }
             }
-        }
-        
-        // Set hover text for AI and real images
-        if (pairData.aiPosition === 'left') {
-            // Left is AI, right is real
-            image1Container.setAttribute('data-image-type', aiMetadataText);
             
-            // Add metadata to real image if available
-            if (realMetadata) {
-                image2Container.setAttribute('data-image-type', 
-                    `"${realMetadata.Title}"\n${realMetadata.Author}`);
+            // Set hover text for AI and real images
+            if (pairData.aiPosition === 'left') {
+                // Left is AI, right is real
+                DOM.image1Container.setAttribute('data-image-type', aiMetadataText);
+                
+                // Add metadata to real image if available
+                if (realMetadata) {
+                    DOM.image2Container.setAttribute('data-image-type', 
+                        `"${realMetadata.Title}"\n${realMetadata.Author}`);
+                } else {
+                    DOM.image2Container.setAttribute('data-image-type', 'Real Image');
+                }
             } else {
-                image2Container.setAttribute('data-image-type', 'Real Image');
+                // Left is real, right is AI
+                DOM.image2Container.setAttribute('data-image-type', aiMetadataText);
+                
+                // Add metadata to real image if available
+                if (realMetadata) {
+                    DOM.image1Container.setAttribute('data-image-type', 
+                        `"${realMetadata.Title}"\n${realMetadata.Author}`);
+                } else {
+                    DOM.image1Container.setAttribute('data-image-type', 'Real Image');
+                }
             }
-        } else {
-            // Left is real, right is AI
-            image2Container.setAttribute('data-image-type', aiMetadataText);
             
-            // Add metadata to real image if available
-            if (realMetadata) {
-                image1Container.setAttribute('data-image-type', 
-                    `"${realMetadata.Title}"\n${realMetadata.Author}`);
+            // Highlight the user's selection as green (correct) or red (incorrect)
+            if (pairData.userSelected === 'left') {
+                DOM.image1Container.style.border = pairData.correct ? '4px solid green' : '4px solid red';
             } else {
-                image1Container.setAttribute('data-image-type', 'Real Image');
+                DOM.image2Container.style.border = pairData.correct ? '4px solid green' : '4px solid red';
             }
         }
         
-        // Highlight the user's selection as green (correct) or red (incorrect)
-        if (pairData.userSelected === 'left') {
-            image1Container.style.border = pairData.correct ? '4px solid green' : '4px solid red';
-        } else {
-            image2Container.style.border = pairData.correct ? '4px solid green' : '4px solid red';
+        function endReview() {
+            // Switch back to normal mode
+            GameState.reviewMode = false;
+            
+            // Show results again
+            Utils.hideElement(DOM.gameContainer);
+            Utils.showElement(DOM.landingContainer);
+            Utils.showElement(DOM.resultsSection);
+            
+            // Reset image containers
+            UIManager.resetImageContainers();
+        }
+        
+        function nextReviewPair() {
+            GameState.reviewIndex++;
+            loadReviewPair();
+        }
+        
+        return {
+            initGame,
+            startGame,
+            loadImagePair,
+            checkAnswer,
+            resetGame,
+            startReview,
+            handleShowLeaderboard,
+            nextReviewPair,
+            loadReviewPair
+        };
+    })();
+
+    // ==================
+    // EVENT HANDLERS
+    // ==================
+    function setupEventListeners() {
+        // Game navigation
+        DOM.startGameButton.addEventListener('click', GameCore.startGame);
+        DOM.playAgainButton.addEventListener('click', GameCore.resetGame);
+        DOM.reviewGameButton.addEventListener('click', GameCore.startReview);
+        
+        // Image selection
+        DOM.image1Container.addEventListener('click', () => {
+            if (GameState.reviewMode) {
+                GameCore.nextReviewPair();
+            } else {
+                GameCore.checkAnswer('left');
+            }
+        });
+        
+        DOM.image2Container.addEventListener('click', () => {
+            if (GameState.reviewMode) {
+                GameCore.nextReviewPair();
+            } else {
+                GameCore.checkAnswer('right');
+            }
+        });
+        
+        // Leaderboard
+        if (DOM.showLeaderboardButton) {
+            DOM.showLeaderboardButton.addEventListener('click', GameCore.handleShowLeaderboard);
+        }
+        
+        if (DOM.leaderboardBackButton) {
+            DOM.leaderboardBackButton.addEventListener('click', UIManager.hideLeaderboard);
         }
     }
-    
-    function endReview() {
-        // Switch back to normal mode
-        reviewMode = false;
-        
-        // Show results again
-        gameContainer.classList.add('hidden');
-        landingContainer.classList.remove('hidden');
-        resultsSection.classList.remove('hidden');
-        
-        // Reset image borders
-        image1Container.style.border = '';
-        image2Container.style.border = '';
-        
-        // Remove the review hover class
-        image1Container.classList.remove('review-hover-enabled');
-        image2Container.classList.remove('review-hover-enabled');
-        
-        // Remove data attributes
-        image1Container.removeAttribute('data-image-type');
-        image2Container.removeAttribute('data-image-type');
-    }
-    
-    function nextReviewPair() {
-        reviewIndex++;
-        loadReviewPair();
-    }
+
+    // Initialize the game
+    await GameCore.initGame();
+    setupEventListeners();
 });
