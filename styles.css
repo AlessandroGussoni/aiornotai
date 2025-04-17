@@ -426,6 +426,21 @@ h1 {
     }
 }
 
+/* Progress bar styles */
+.progress-bar-container {
+    width: 100%;
+    height: 4px;
+    background-color: rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+    overflow: hidden;
+}
+
+#progress-bar {
+    height: 100%;
+    background-color: #000;
+    width: 0%;
+    transition: width 0.3s ease;
+}
 
 /* Update the media query for smaller screens */
 @media (max-width: 768px) {

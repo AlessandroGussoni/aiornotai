@@ -45,7 +45,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Result elements
         percentileContainer: document.getElementById('percentile-container'),
-        percentileValue: document.getElementById('percentile-value')
+        percentileValue: document.getElementById('percentile-value'),
+        
+        // Progress elements
+        progressBar: document.getElementById('progress-bar')
     };
 
     // Game state
@@ -688,6 +691,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             GameState.correctAnswers = 0;
             GameState.reviewMode = false;
             
+            // Reset progress bar
+            if (DOM.progressBar) {
+                DOM.progressBar.style.width = '0%';
+            }
+            
             // Hide landing page
             Utils.hideElement(DOM.landingContainer);
             
@@ -741,6 +749,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 ImageManager.preloadSpecificPair(GameState.currentPair + 1, false);
             }
             
+            // Update progress bar
+            if (DOM.progressBar) {
+                const progressPercent = ((GameState.currentPair - 1) / CONFIG.totalPairs) * 100;
+                DOM.progressBar.style.width = `${progressPercent}%`;
+            }
+            
             // Randomly decide which image will be AI-generated
             GameState.aiImagePosition = Math.random() < 0.5 ? 'left' : 'right';
             
@@ -791,8 +805,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Move to next pair or show results
             if (GameState.currentPair < CONFIG.totalPairs) {
                 GameState.currentPair++;
+                
+                // Update progress bar for next pair
+                if (DOM.progressBar) {
+                    const progressPercent = ((GameState.currentPair - 1) / CONFIG.totalPairs) * 100;
+                    DOM.progressBar.style.width = `${progressPercent}%`;
+                }
+                
                 loadImagePair();
             } else {
+                // Set progress bar to 100% when finished
+                if (DOM.progressBar) {
+                    DOM.progressBar.style.width = '100%';
+                }
+                
                 showResults();
             }
         }
@@ -830,6 +856,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             GameState.correctAnswers = 0;
             GameState.gameHistory = [];
             GameState.reviewMode = false;
+            
+            // Reset progress bar
+            if (DOM.progressBar) {
+                DOM.progressBar.style.width = '0%';
+            }
             
             // Hide the results section
             Utils.hideElement(DOM.landingContainer);
@@ -891,6 +922,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
             
             const pairData = GameState.gameHistory[GameState.reviewIndex];
+            
+            // Update progress bar for review mode
+            if (DOM.progressBar) {
+                const progressPercent = (GameState.reviewIndex / GameState.gameHistory.length) * 100;
+                DOM.progressBar.style.width = `${progressPercent}%`;
+            }
             
             // Set image sources
             DOM.image1.src = pairData.leftImageSrc;
