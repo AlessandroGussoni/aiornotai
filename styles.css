@@ -118,7 +118,8 @@ body {
     height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: center; /* Add this to center content vertically */
+    justify-content: center; /* Center content vertically */
+    align-items: center; /* Center content horizontally */
 }
 
 header {
@@ -413,19 +414,6 @@ h1 {
     color: #333;
 }
 
-/* Make leaderboard responsive */
-@media (max-width: 768px) {
-    .leaderboard-item {
-        flex-direction: column;
-        text-align: center;
-    }
-    
-    .leaderboard-item img {
-        margin-right: 0;
-        margin-bottom: 15px;
-    }
-}
-
 /* Progress bar styles */
 .progress-bar-container {
     width: 100%;
@@ -442,19 +430,217 @@ h1 {
     transition: width 0.3s ease;
 }
 
-/* Update the media query for smaller screens */
+/* Mobile optimizations */
 @media (max-width: 768px) {
+    /* Update existing rules */
     #images-container {
         flex-direction: column;
-        gap: 20px;
+        gap: 15px;
+        height: auto;
+        overflow: visible;
+        padding: 10px;
+        max-height: calc(100vh - 60px);
+        overflow-y: auto;
     }
+    
     .image-choice {
-        height: 400px;
+        height: 250px; /* Further reduced height */
+        min-height: 0;
+        width: 100%;
+        flex-shrink: 0;
+        margin-bottom: 5px;
     }
     
     .review-hover-enabled::before {
         font-size: 14px;  /* Smaller font on mobile */
         padding: 10px;
         line-height: 1.4;
+    }
+    
+    /* New rules for mobile optimization */
+    /* Fix container positioning */
+    .container {
+        height: auto;
+        min-height: 100vh;
+        padding: 10px;
+        /* Add safe area for iOS devices */
+        padding-bottom: calc(20px + env(safe-area-inset-bottom, 50px));
+        justify-content: flex-start;
+        overflow: hidden; /* Prevent scrolling on the container itself */
+    }
+    
+    /* Fix landing container width and spacing */
+    #landing-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 10px auto 60px; /* More bottom margin to avoid Safari bar */
+        padding: 20px 15px;
+        box-sizing: border-box;
+        min-height: auto;
+        position: relative;
+        z-index: 10; /* Ensure it's above the game container */
+    }
+    
+    /* Fix results section spacing and width */
+    #results-section {
+        width: 100%;
+        padding: 0 10px;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 20; /* Higher z-index to ensure it covers game elements */
+        background: #f8f4e5; /* Add background to hide content beneath */
+    }
+    
+    /* Make sure results section properly hides game container */
+    #results-section:not(.hidden) ~ #game-container {
+        display: none !important;
+    }
+    
+    /* Optimize button group for mobile */
+    .button-group {
+        flex-wrap: wrap;
+        gap: 10px;
+        width: 100%;
+    }
+    
+    .button-group button {
+        min-width: 0;
+        flex: 1;
+        padding: 12px 15px;
+        margin-top: 15px;
+    }
+    
+    /* Optimize game container */
+    #game-container {
+        height: auto;
+        max-height: 100vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-start;
+        padding-bottom: 60px; /* Extra space at bottom for Safari */
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 5; /* Lower z-index so results can overlay */
+    }
+    
+    /* Make sure hidden game container is really hidden */
+    #game-container.hidden {
+        display: none !important;
+        visibility: hidden;
+        opacity: 0;
+        pointer-events: none;
+    }
+    
+    /* Progress bar positioning */
+    .progress-bar-container {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    /* Optimize leaderboard */
+    #leaderboard-container {
+        width: 100%;
+        max-width: 100%;
+        margin: 10px auto;
+        padding: 20px 15px;
+        box-sizing: border-box;
+        position: relative;
+        z-index: 30; /* Highest z-index to be above all other elements */
+        background: #f8f4e5;
+    }
+    
+    .leaderboard-item {
+        flex-direction: column;
+        text-align: center;
+    }
+    
+    .leaderboard-item img {
+        margin-right: 0;
+        margin-bottom: 15px;
+        width: 120px;
+        height: 120px;
+    }
+}
+
+/* Additional optimizations for very small screens */
+@media (max-width: 480px) {
+    #landing-container h1 {
+        font-size: 28px;
+        margin-bottom: 20px;
+    }
+    
+    #landing-container p {
+        font-size: 14px;
+        margin-bottom: 12px;
+    }
+    
+    #start-game, #play-again, #review-game, #show-leaderboard {
+        width: 100%;
+        max-width: 100%;
+        padding: 12px 20px;
+        margin-top: 15px;
+        font-size: 12px;
+    }
+    
+    .button-group {
+        flex-direction: column;
+        width: 100%;
+    }
+    
+    .button-group button {
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    
+    .image-choice {
+        height: auto;
+        max-height: 40vh; /* Use percentage of viewport height */
+        aspect-ratio: 1/1; /* Keep images square */
+        width: 90%;
+        margin: 0 auto;
+    }
+    
+    /* Better spacing for image containers */
+    #images-container {
+        padding: 5px;
+        gap: 10px;
+        align-items: center;
+        justify-content: center;
+    }
+}
+
+/* iPhone-specific optimizations */
+@media screen and (max-width: 428px) and (min-height: 800px) {
+    .image-choice {
+        max-height: 35vh;
+        margin-bottom: 10px;
+    }
+    
+    #images-container {
+        padding: 5px;
+        gap: 15px;
+        max-height: 85vh;
+    }
+}
+
+/* Fix for iOS Safari bottom bar */
+@supports (-webkit-touch-callout: none) {
+    /* iOS specific styles */
+    .container {
+        padding-bottom: calc(20px + env(safe-area-inset-bottom, 80px));
+    }
+    
+    #game-container {
+        padding-bottom: calc(20px + env(safe-area-inset-bottom, 100px));
+    }
+    
+    #landing-container {
+        margin-bottom: calc(20px + env(safe-area-inset-bottom, 100px));
     }
 }
