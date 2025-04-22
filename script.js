@@ -14,7 +14,46 @@ document.addEventListener('DOMContentLoaded', async () => {
         ]
     };
 
-    // DOM elements - cached for performance
+    const URL_HANDLER = (() => {
+        function getSharedPair() {
+            // First check for query parameters (works in both local dev and production)
+            const urlParams = new URLSearchParams(window.location.search);
+            const aiParam = urlParams.get('ai');
+            const realParam = urlParams.get('real');
+            
+            if (aiParam && realParam) {
+                return {
+                    aiIndex: parseInt(aiParam, 10),
+                    realIndex: parseInt(realParam, 10)
+                };
+            }
+            
+            // Fallback to path-based format for production environment
+            const path = window.location.pathname;
+            const pairMatch = path.match(/\/image(\d+)_(\d+)/);
+            
+            if (pairMatch && pairMatch.length === 3) {
+                return {
+                    aiIndex: parseInt(pairMatch[1], 10),
+                    realIndex: parseInt(pairMatch[2], 10)
+                };
+            }
+            
+            return null;
+        }
+        
+        function generateShareUrl(aiIndex, realIndex) {
+            // Create a URL using query parameters for maximum compatibility
+            const baseUrl = window.location.origin;
+            return `${baseUrl}/?ai=${aiIndex}&real=${realIndex}`;
+        }
+        
+        return {
+            getSharedPair,
+            generateShareUrl
+        };
+    })();
+
     const DOM = {
         // Containers
         landingContainer: document.getElementById('landing-container'),
@@ -42,6 +81,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Loading elements
         loadingProgress: document.getElementById('loading-progress'),
         loadingMessage: document.getElementById('loading-message'),
+
+        copyLinkButton: document.getElementById('copy-link-button'),
+        copyLinkMessage: document.getElementById('copy-link-message'),
         
         // Result elements
         percentileContainer: document.getElementById('percentile-container'),
@@ -66,7 +108,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         currentBgIndex: 0,
         bgRotationInterval: null,
         isBackgroundLoading: false,
-        backgroundLoadPromise: null
+        backgroundLoadPromise: null,
+        isSinglePairMode: false,
+        sharedPairAiIndex: null,
+        sharedPairRealIndex: null
     };
 
     // Image cache
@@ -657,11 +702,31 @@ document.addEventListener('DOMContentLoaded', async () => {
             try {
                 UIManager.showLoading("Loading game...");
                 
-                // Sample indices based on the counted files
-                GameState.ai_indices = Utils.getUniqueRandomIndices(
-                    CONFIG.totalPairs, 1, CONFIG.aiImagesCount);
-                GameState.real_indices = Utils.getUniqueRandomIndices(
-                    CONFIG.totalPairs, 1, CONFIG.realImagesCount);
+                // Check if a shared pair is in the URL
+                const sharedPair = URL_HANDLER.getSharedPair();
+                
+                if (sharedPair) {
+                    // Set up a single pair game
+                    GameState.isSinglePairMode = true;
+                    GameState.sharedPairAiIndex = sharedPair.aiIndex;
+                    GameState.sharedPairRealIndex = sharedPair.realIndex;
+                    
+                    // Only one pair for this mode
+                    CONFIG.totalPairs = 1;
+                    
+                    // Set predefined indices for the single pair
+                    GameState.ai_indices = [sharedPair.aiIndex];
+                    GameState.real_indices = [sharedPair.realIndex];
+                } else {
+                    // Normal game mode
+                    GameState.isSinglePairMode = false;
+                    
+                    // Sample indices based on the counted files
+                    GameState.ai_indices = Utils.getUniqueRandomIndices(
+                        CONFIG.totalPairs, 1, CONFIG.aiImagesCount);
+                    GameState.real_indices = Utils.getUniqueRandomIndices(
+                        CONFIG.totalPairs, 1, CONFIG.realImagesCount);
+                }
                 
                 // Load the artwork metadata
                 await ImageManager.loadArtworkMetadata();
@@ -684,7 +749,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         }
         
-        async function startGame() {
+        function startGame() {
             // Reset game history
             GameState.gameHistory = [];
             GameState.currentPair = 1;
@@ -699,19 +764,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Hide landing page
             Utils.hideElement(DOM.landingContainer);
             
-            // If we need to preload the first pair, show loading
-            if (!ImageManager.isPairPreloaded(GameState.currentPair)) {
-                UIManager.showLoading("Loading first images...");
-                
-                // Preload just the first pair
-                await ImageManager.preloadSpecificPair(GameState.currentPair);
-                
-                // Hide loading when done
-                UIManager.hideLoading();
-            }
-            
             // Show game
             Utils.showElement(DOM.gameContainer);
+            
+            // Modify instructions for single pair mode
+            if (GameState.isSinglePairMode) {
+                // Hide progress bar in single pair mode
+                if (DOM.progressBar) {
+                    DOM.progressBar.parentElement.style.display = 'none';
+                }
+            }
             
             // Init background rotation if not already started
             if (!GameState.bgRotationInterval) {
@@ -802,7 +864,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 aiIndex: ai_index
             });
         
-            // Move to next pair or show results
+            // If single pair mode, immediately show results
+            if (GameState.isSinglePairMode) {
+                // Set progress bar to 100% when finished
+                if (DOM.progressBar) {
+                    DOM.progressBar.style.width = '100%';
+                }
+                
+                showResults();
+                return;
+            }
+            
+            // For regular mode, move to next pair or show results
             if (GameState.currentPair < CONFIG.totalPairs) {
                 GameState.currentPair++;
                 
@@ -851,6 +924,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
         
         function resetGame() {
+            // Check if we were in single pair mode
+            const wasSinglePairMode = GameState.isSinglePairMode;
+            
+            if (wasSinglePairMode) {
+                // Redirect to the home page for a full game
+                window.location.href = window.location.origin;
+                return;
+            }
+            
+            // Normal reset for regular mode
             // Reset game variables
             GameState.currentPair = 1;
             GameState.correctAnswers = 0;
@@ -876,6 +959,64 @@ document.addEventListener('DOMContentLoaded', async () => {
                 CONFIG.totalPairs, 1, CONFIG.realImagesCount);
                 
             loadImagePair();
+        }
+
+        // Add new method for copying current pair link
+        function copyCurrentPairLink() {
+            if (GameState.currentPair <= 0 || GameState.currentPair > GameState.ai_indices.length) {
+                console.error('Invalid pair index to copy');
+                return;
+            }
+            
+            // Get the indices
+            const ai_index = GameState.ai_indices[GameState.currentPair - 1];
+            const real_index = GameState.real_indices[GameState.currentPair - 1];
+            
+            // Generate the share URL
+            const shareUrl = URL_HANDLER.generateShareUrl(ai_index, real_index);
+            
+            // Copy to clipboard
+            navigator.clipboard.writeText(shareUrl)
+                .then(() => {
+                    // Show the copied message
+                    if (DOM.copyLinkMessage) {
+                        DOM.copyLinkMessage.classList.remove('hidden');
+                        
+                        // Hide the message after 2 seconds
+                        setTimeout(() => {
+                            DOM.copyLinkMessage.classList.add('hidden');
+                        }, 2000);
+                    }
+                })
+                .catch(err => {
+                    console.error('Failed to copy URL: ', err);
+                    
+                    // Fallback method
+                    const textarea = document.createElement('textarea');
+                    textarea.value = shareUrl;
+                    textarea.style.position = 'fixed';  // Avoid scrolling to bottom
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    
+                    try {
+                        document.execCommand('copy');
+                        
+                        // Show the copied message
+                        if (DOM.copyLinkMessage) {
+                            DOM.copyLinkMessage.classList.remove('hidden');
+                            
+                            // Hide the message after 2 seconds
+                            setTimeout(() => {
+                                DOM.copyLinkMessage.classList.add('hidden');
+                            }, 2000);
+                        }
+                    } catch (err) {
+                        console.error('Fallback copy failed:', err);
+                        alert('Failed to copy the link. Please copy it manually: ' + shareUrl);
+                    }
+                    
+                    document.body.removeChild(textarea);
+                });
         }
         
         async function handleShowLeaderboard() {
@@ -1018,7 +1159,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             startReview,
             handleShowLeaderboard,
             nextReviewPair,
-            loadReviewPair
+            loadReviewPair,
+            copyCurrentPairLink
         };
     })();
 
@@ -1056,9 +1198,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (DOM.leaderboardBackButton) {
             DOM.leaderboardBackButton.addEventListener('click', UIManager.hideLeaderboard);
         }
+
+        if (DOM.copyLinkButton) {
+            DOM.copyLinkButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the image click
+                GameCore.copyCurrentPairLink();
+            });
+        }
+    }
+
+    async function checkAutoStartGame() {
+        if (GameState.isSinglePairMode) {
+            // Start the game automatically for shared links
+            GameCore.startGame();
+        }
     }
 
     // Initialize the game
     await GameCore.initGame();
     setupEventListeners();
+    await checkAutoStartGame()
 });

@@ -430,6 +430,68 @@ h1 {
     transition: width 0.3s ease;
 }
 
+#share-container {
+    text-align: center;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    width: 100%;
+}
+
+#copy-link-button {
+    padding: 10px 20px;
+    background-color: #000000;
+    color: #f8f4e5;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    font-size: 14px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    font-weight: bold;
+    transition: background-color 0.3s, transform 0.2s;
+    display: inline-block;
+}
+
+#copy-link-button:hover {
+    background-color: #333333;
+    transform: translateY(-2px);
+}
+
+.copy-message {
+    display: inline-block;
+    margin-left: 10px;
+    font-family: monospace;
+    font-size: 14px;
+    color: #333;
+    transition: opacity 0.3s;
+}
+
+.copy-message.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Mobile optimization for share container */
+@media (max-width: 768px) {
+    #share-container {
+        margin-top: 15px;
+        margin-bottom: 15px;
+    }
+    
+    #copy-link-button {
+        width: 100%;
+        max-width: 300px;
+        padding: 12px 15px;
+        font-size: 12px;
+    }
+    
+    .copy-message {
+        display: block;
+        margin-left: 0;
+        margin-top: 8px;
+    }
+}
+
 /* Mobile optimizations */
 @media (max-width: 768px) {
     /* Update existing rules */
