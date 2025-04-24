@@ -615,8 +615,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         function updateResults(correctCount, totalPairs) {
             const successRate = (correctCount / totalPairs) * 100;
-            DOM.correctCountElement.textContent = correctCount;
-            DOM.successRateElement.textContent = successRate.toFixed(0);
+            
+            // Check if we're in single pair mode
+            if (GameState.isSinglePairMode) {
+                // Get the results message container
+                const messageContainer = DOM.correctCountElement.parentElement;
+                
+                // Update message based on correctness
+                if (correctCount === 1) {
+                    messageContainer.textContent = "You correctly identified the AI image!";
+                } else {
+                    messageContainer.textContent = "Opss, It looks like you were wrong.";
+                }
+                
+                // Hide the success rate and percentile paragraphs
+                const rateContainer = DOM.successRateElement.parentElement;
+                rateContainer.classList.add('hidden');
+                if (DOM.percentileContainer) {
+                    DOM.percentileContainer.classList.add('hidden');
+                }
+            } else {
+                // Regular game mode - update the standard results
+                DOM.correctCountElement.textContent = correctCount;
+                DOM.successRateElement.textContent = successRate.toFixed(0);
+                
+                // Make sure success rate and percentile are visible
+                DOM.successRateElement.parentElement.classList.remove('hidden');
+                if (DOM.percentileContainer) {
+                    DOM.percentileContainer.classList.remove('hidden');
+                }
+            }
         }
         
         function updatePercentile(percentile) {
@@ -910,12 +938,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                 successRate.toFixed(0)
             );
             
-            // Calculate and display the player's percentile
-            try {
-                const percentile = await GameAnalytics.getPlayerPercentile(GameState.correctAnswers);
-                UIManager.updatePercentile(percentile);
-            } catch (error) {
-                console.error("Error getting percentile:", error);
+            // Only calculate percentile for regular games, not single pair mode
+            if (!GameState.isSinglePairMode) {
+                try {
+                    const percentile = await GameAnalytics.getPlayerPercentile(GameState.correctAnswers);
+                    UIManager.updatePercentile(percentile);
+                } catch (error) {
+                    console.error("Error getting percentile:", error);
+                    UIManager.updatePercentile(null);
+                }
+            } else {
+                // For single pair mode, don't show percentile
                 UIManager.updatePercentile(null);
             }
             

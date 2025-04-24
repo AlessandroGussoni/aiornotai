@@ -419,8 +419,12 @@ h1 {
     width: 100%;
     height: 4px;
     background-color: rgba(0, 0, 0, 0.1);
-    margin-bottom: 20px;
+    margin-bottom: 15px;
     overflow: hidden;
+    position: absolute;
+    top: 40px;
+    left: 0; /* Add explicit left positioning */
+    right: 0; /* Add explicit right positioning */
 }
 
 #progress-bar {
@@ -432,28 +436,32 @@ h1 {
 
 #share-container {
     text-align: center;
-    margin-top: 10px;  /* Reduced from 20px */
-    margin-bottom: 10px; /* Reduced from 20px */
+    margin-top: 10px;
+    margin-bottom: 10px;
     width: 100%;
     display: flex;
-    justify-content: center; /* Center the button horizontally */
+    justify-content: center;
+    align-items: center;
+    position: relative;
 }
 
-/* Updated copy button to be circular with just an icon */
 #copy-link-button {
     width: 50px;
     height: 50px;
     background-color: #000000;
     color: #f8f4e5;
     border: none;
-    border-radius: 50%; /* Make it perfectly circular */
+    border-radius: 50%;
     cursor: pointer;
-    font-size: 20px; /* Larger font size for the icon */
+    font-size: 20px;
     display: flex;
     align-items: center;
     justify-content: center;
     transition: background-color 0.3s, transform 0.2s;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    position: relative;
+    margin: 0 auto;
+    margin-top: -25px;
 }
 
 #copy-link-button:hover {
@@ -462,8 +470,11 @@ h1 {
 }
 
 .copy-message {
-    display: inline-block;
-    margin-left: 10px;
+    position: absolute;
+    right: 0;
+    left: 0;
+    text-align: center;
+    margin-top: 55px;
     font-family: monospace;
     font-size: 14px;
     color: #333;
@@ -483,16 +494,17 @@ h1 {
     }
     
     #copy-link-button {
-        width: 100%;
-        max-width: 300px;
-        padding: 12px 15px;
-        font-size: 12px;
+        width: 50px; /* Keep consistent with desktop */
+        height: 50px;
+        max-width: none; /* Remove the full width setting */
+        font-size: 20px;
+        margin: 0 auto;
     }
     
     .copy-message {
         display: block;
         margin-left: 0;
-        margin-top: 8px;
+        margin-top: 50px;
     }
 }
 
