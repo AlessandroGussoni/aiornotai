@@ -678,10 +678,21 @@ h1 {
     
     .image-choice {
         height: auto;
-        max-height: 40vh; /* Use percentage of viewport height */
-        aspect-ratio: 1/1; /* Keep images square */
+        max-height: 40vh;
+        /* Maintain aspect ratio but don't force square */
+        aspect-ratio: 4/3;
         width: 90%;
-        margin: 0 auto;
+        margin: 0 auto 15px auto;
+    }
+    
+    /* Ensure game container has proper spacing */
+    #game-container {
+        padding-bottom: 100px;
+    }
+    
+    /* More space for copy button on small screens */
+    #share-container {
+        bottom: 30px;
     }
     
     /* Better spacing for image containers */
@@ -691,6 +702,8 @@ h1 {
         align-items: center;
         justify-content: center;
     }
+
+    
 }
 
 /* iPhone-specific optimizations */
@@ -720,5 +733,18 @@ h1 {
     
     #landing-container {
         margin-bottom: calc(20px + env(safe-area-inset-bottom, 100px));
+    }
+
+    .container {
+        padding-bottom: calc(50px + env(safe-area-inset-bottom, 80px));
+    }
+    
+    #game-container {
+        padding-bottom: calc(80px + env(safe-area-inset-bottom, 100px));
+    }
+    
+    /* Ensure copy button is above the home indicator */
+    #share-container {
+        bottom: calc(20px + env(safe-area-inset-bottom, 30px));
     }
 }
