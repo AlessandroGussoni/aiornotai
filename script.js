@@ -84,6 +84,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         copyLinkButton: document.getElementById('copy-link-button'),
         copyLinkMessage: document.getElementById('copy-link-message'),
+
+        twitterShareButton: document.getElementById('twitter-share-button'),
         
         // Result elements
         percentileContainer: document.getElementById('percentile-container'),
@@ -923,6 +925,33 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showResults();
             }
         }
+
+        function shareOnTwitter() {
+            if (GameState.currentPair <= 0 || GameState.currentPair > GameState.ai_indices.length) {
+                console.error('Invalid pair index to share');
+                return;
+            }
+            
+            // Get the indices
+            const ai_index = GameState.ai_indices[GameState.currentPair - 1];
+            const real_index = GameState.real_indices[GameState.currentPair - 1];
+            
+            // Generate the share URL
+            const shareUrl = URL_HANDLER.generateShareUrl(ai_index, real_index);
+            
+            // Create Twitter share text
+            const shareText = "Can you tell which image is AI-generated? Take the AI or not AI challenge! #AIart #ArtChallenge";
+            
+            // Encode the URL and text
+            const encodedText = encodeURIComponent(shareText);
+            const encodedUrl = encodeURIComponent(shareUrl);
+            
+            // Create Twitter intent URL
+            const twitterUrl = `https://twitter.com/intent/tweet?text=${encodedText}&url=${encodedUrl}`;
+            
+            // Open Twitter sharing in a new window
+            window.open(twitterUrl, '_blank', 'width=550,height=420');
+        }
         
         async function showResults() {
             // Calculate success rate
@@ -1193,7 +1222,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             handleShowLeaderboard,
             nextReviewPair,
             loadReviewPair,
-            copyCurrentPairLink
+            copyCurrentPairLink,
+            shareOnTwitter  
         };
     })();
 
@@ -1236,6 +1266,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             DOM.copyLinkButton.addEventListener('click', (e) => {
                 e.stopPropagation(); // Prevent triggering the image click
                 GameCore.copyCurrentPairLink();
+            });
+        }
+
+        if (DOM.twitterShareButton) {
+            DOM.twitterShareButton.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent triggering the image click
+                GameCore.shareOnTwitter();
             });
         }
     }
