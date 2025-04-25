@@ -106,5 +106,17 @@
         "Metadata": {
             "url": "https://www.artaigallery.com/collections/all-items/products/mirror-life"
         }
+    },
+    "19": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "very dark image little light abstract man stands with light in his hands surrounded by creepy monsters on which the light falls all the light comes from the hands of the man creepy drawing"
+        }
+    },
+    "20": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "创作高品质、细节丰富，穆夏插画风格的敦煌壁画。注重作品精细的细节，丰富多变的颜色，动态的人物，宏伟的建筑，参考中国宋代山水画的构图，绘画风格融合西方油画中对物体立体的表达，画面需要大量留白，并捕捉莫高窟历史文化底蕴的精髓"
+        }
     }
 }

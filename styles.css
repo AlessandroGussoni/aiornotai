@@ -800,4 +800,7 @@ h1 {
     #share-container {
         bottom: calc(20px + env(safe-area-inset-bottom, 30px));
     }
+    #floating-reminder {
+    bottom: calc(70px + env(safe-area-inset-bottom, 40px)); /* Adjust for the home indicator */
+  }
 }

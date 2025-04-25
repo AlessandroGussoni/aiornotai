@@ -3,8 +3,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Config & Constants
     const CONFIG = {
         totalPairs: 10,
-        aiImagesCount: 18,
-        realImagesCount: 18,
+        aiImagesCount: 20,
+        realImagesCount: 20,
         backgroundRotationInterval: 20000, // 20 seconds
         backgrounds: [
             'assets/backgrounds/1.png',
