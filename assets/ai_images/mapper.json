@@ -118,5 +118,26 @@
         "Metadata": {
             "prompt": "创作高品质、细节丰富，穆夏插画风格的敦煌壁画。注重作品精细的细节，丰富多变的颜色，动态的人物，宏伟的建筑，参考中国宋代山水画的构图，绘画风格融合西方油画中对物体立体的表达，画面需要大量留白，并捕捉莫高窟历史文化底蕴的精髓"
         }
+    },
+    "21": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "developing talents, abstract vector graphic"
+
+        }
+    },
+    "22": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "il painting in the distinctive style of Mian Situ, using thick palette knife texture and sharply defined contours, portraying a busy urban street scene in New York City during the 1960s. In the foreground, men in suits and fedoras and women in colorful dresses and gloves walk along the sidewalk, their figures catching late afternoon sunlight. Some are in motion, others chatting or window shopping, painted with expressive brushstrokes and rich shadow work. Classic cars from the era line the curb, painted in compact tones of mint green, cream, and cherry red. The street shimmers with reflections from nearby glass storefronts and chrome surfaces. In the background, mid-century buildings rise in tones of rust, steel blue, and oxidized gold, adorned with retro signage and vintage advertisements. Trees line the avenue, their leaves blending olive green and soft lilac into the warm urban light. The scene is full of movement and character, rendered in encaustic textures with bold palette knife strokes, capturing the energy, culture, and style of 1960s New York in the narrative realism of Mian Situ."
+
+        }
+    },
+    "23": {
+        "Source": "Midjourney",
+        "Metadata": {
+            "prompt": "Chinese ink landscape in black and gold, traditional landscape painting style, golden mountain peaks with black ink wash, flowing golden river, minimalist negative space, symmetrical composition, 8k ultra-detailed, traditional Chinese color scheme"
+
+        }
     }
 }
